@@ -29,6 +29,19 @@ const PRICE = 100_000_000n;
 
 let counter = 0;
 
+/**
+ * A commitment and its secret, the pair `createDraft` needs.
+ *
+ * The secret is written at creation and only copied into the published `seed`
+ * at the draw (migration 003), so a fixture that supplied a hash without a
+ * secret would create a raffle nobody could ever draw.
+ */
+function seedPair() {
+  const { seed, seedHash } = commitSeed();
+  return { seedHash, seedSecret: seed };
+}
+
+
 async function openRaffleFixture(maxTickets = 10) {
   counter += 1;
   const created = await createDraft({
@@ -41,7 +54,7 @@ async function openRaffleFixture(maxTickets = 10) {
     houseFeeBps: 500,
     drawSlot: 400_000_000n + BigInt(counter),
     endsAt: new Date(Date.now() + 60 * 60_000),
-    seedHash: commitSeed().seedHash,
+    ...seedPair(),
   });
   if (!created.ok) throw new Error(created.reason);
   const opened = await openRaffle(created.raffle.id, {
@@ -103,7 +116,7 @@ describe("createTicketOrder", () => {
       houseFeeBps: 0,
       drawSlot: 1n,
       endsAt: new Date(Date.now() + 60_000),
-      seedHash: commitSeed().seedHash,
+      ...seedPair(),
     });
     if (!created.ok) throw new Error(created.reason);
     expect(await createTicketOrder({

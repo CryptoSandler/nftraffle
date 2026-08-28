@@ -25,6 +25,16 @@ export const dynamic = "force-dynamic";
  *
  * WHO CALLS THIS: the "Reveal and draw" form on `/admin`.
  */
+/** The stored secret, read only to compute the winner. Never returned anywhere. */
+async function storedSeed(raffleId: string): Promise<string | null> {
+  const { queryOne } = await import("../../../../../../lib/db");
+  const row = await queryOne<{ seed_secret: string | null }>(
+    `SELECT seed_secret FROM raffles WHERE id = $1`,
+    [raffleId],
+  );
+  return row?.seed_secret ?? null;
+}
+
 export async function POST(
   request: Request,
   context: RouteContext<"/api/admin/raffles/[id]/draw">,
@@ -55,24 +65,14 @@ export async function POST(
     );
   }
 
-  if (raffle.seed === null) {
-    // The seed is generated at creation and held by the row. A raffle that
-    // reached `closed` without one cannot be drawn by anybody, ever, and
-    // saying so is more useful than a 500 from the arithmetic below.
-    return json(
-      { error: "This raffle has no stored seed, so its draw cannot be run." },
-      { status: 409, headers: NO_STORE },
-    );
-  }
-
-  if (!verifyCommitment(raffle.seed, raffle.seedHash)) {
-    console.error(`draw ${id}: stored seed does not match the published commitment.`);
-    return json(
-      { error: "This raffle's seed does not match its published commitment. Not drawing." },
-      { status: 409, headers: NO_STORE },
-    );
-  }
-
+  /**
+   * The seed lives in `seed_secret` and is read by `recordDraw` alone
+   * (migration 003), so this route never handles it. That is deliberate: a
+   * route that read the secret in order to pass it back in would be a second
+   * place the published value could diverge from the committed one.
+   *
+   * The commitment is re-checked below, against what was actually written.
+   */
   const blockhash = await blockhashForSlot(raffle.drawSlot);
   if (!blockhash) {
     // A skipped slot is ordinary on Solana. Refusing rather than silently
@@ -97,9 +97,28 @@ export async function POST(
     );
   }
 
+  const secret = await storedSeed(raffle.id);
+  if (!secret) {
+    return json(
+      { error: "This raffle has no stored seed, so its draw cannot be run." },
+      { status: 409, headers: NO_STORE },
+    );
+  }
+  if (!verifyCommitment(secret, raffle.seedHash)) {
+    // Catches a seed column that was edited, corrupted, or restored from a
+    // backup predating the commitment — all of which would otherwise produce a
+    // winner the public page loudly reports as not checking out, after the
+    // prize had been sent.
+    console.error(`draw ${id}: stored seed does not match the published commitment.`);
+    return json(
+      { error: "This raffle's seed does not match its published commitment. Not drawing." },
+      { status: 409, headers: NO_STORE },
+    );
+  }
+
   const { winningTicket } = deriveWinner({
     seedHash: raffle.seedHash,
-    seed: raffle.seed,
+    seed: secret,
     drawBlockhash: blockhash,
     raffleId: raffle.id,
     ticketCount: tickets.length,
@@ -115,7 +134,6 @@ export async function POST(
   }
 
   const result = await recordDraw(raffle.id, {
-    seed: raffle.seed,
     drawBlockhash: blockhash,
     winnerWallet: winner.wallet,
     winningTicket,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { query, queryOne } from "../../db";
-import { commitSeed } from "../draw";
+import { commitSeed, verifyCommitment } from "../draw";
 import {
   advanceRaffle,
   cancelRaffle,
@@ -29,9 +29,21 @@ const MINT = "8H1yMDsxDs52kZ8kmDzYWiCoTfxLZDvcqcMjxLdbBnRz";
 
 let counter = 0;
 
+/**
+ * A commitment and its secret, the pair `createDraft` needs.
+ *
+ * The secret is written at creation and only copied into the published `seed`
+ * at the draw (migration 003), so a fixture that supplied a hash without a
+ * secret would create a raffle nobody could ever draw.
+ */
+function seedPair() {
+  const { seed, seedHash } = commitSeed();
+  return { seedHash, seedSecret: seed };
+}
+
+
 async function draft(overrides: Partial<Parameters<typeof createDraft>[0]> = {}) {
   counter += 1;
-  const { seedHash } = commitSeed();
   const result = await createDraft({
     slug: `raffle-${counter}`,
     sellerWallet: SELLER,
@@ -42,7 +54,7 @@ async function draft(overrides: Partial<Parameters<typeof createDraft>[0]> = {})
     houseFeeBps: 500,
     drawSlot: 300_000_000n + BigInt(counter),
     endsAt: new Date(Date.now() + 60 * 60_000),
-    seedHash,
+    ...seedPair(),
     ...overrides,
   });
   if (!result.ok) throw new Error(`fixture draft failed: ${result.reason}`);
@@ -109,7 +121,7 @@ describe("createDraft", () => {
       houseFeeBps: 0,
       drawSlot: 1n,
       endsAt: new Date(Date.now() + 60_000),
-      seedHash: commitSeed().seedHash,
+      ...seedPair(),
     });
     // Two drafts naming one mint would both match the same deposit, and the
     // one that published first would take an asset the other seller believed
@@ -136,7 +148,7 @@ describe("createDraft", () => {
       houseFeeBps: 0,
       drawSlot: 1n,
       endsAt: new Date(Date.now() + 60_000),
-      seedHash: commitSeed().seedHash,
+      ...seedPair(),
     });
     expect(second).toEqual({ ok: false, reason: "slug_taken" });
   });
@@ -219,7 +231,6 @@ describe("advanceRaffle — the machine derives the status", () => {
     await sellTickets(row.id, 2);
     await advanceRaffle(row.id);
     await recordDraw(row.id, {
-      seed: "c".repeat(64),
       drawBlockhash: "EETubP5AKHgjPAhzPAFcb8BAY1hMH639CWCFTqi3teA9",
       winnerWallet: OTHER_WALLET,
       winningTicket: 1,
@@ -237,7 +248,6 @@ describe("recordDraw", () => {
   }
 
   const DRAW = {
-    seed: "d".repeat(64),
     drawBlockhash: "EETubP5AKHgjPAhzPAFcb8BAY1hMH639CWCFTqi3teA9",
     winnerWallet: OTHER_WALLET,
     winningTicket: 2,
@@ -249,10 +259,38 @@ describe("recordDraw", () => {
 
     const drawn = await raffleById(row.id);
     expect(drawn?.status).toBe("drawn");
-    expect(drawn?.seed).toBe(DRAW.seed);
+    // The published seed is the STORED one, not a value this test handed in —
+    // `recordDraw` no longer takes a seed at all. Asserting that it hashes to
+    // the commitment is the check that matters, and it is the same check a
+    // stranger runs on the verification page.
+    expect(verifyCommitment(drawn!.seed!, drawn!.seedHash)).toBe(true);
     expect(drawn?.drawBlockhash).toBe(DRAW.drawBlockhash);
     expect(drawn?.winnerWallet).toBe(OTHER_WALLET);
     expect(drawn?.winningTicket).toBe(2);
+  });
+
+
+  it("does not publish the seed before the draw", async () => {
+    // Migration 003's whole point: `seed` is NULL until the draw, so a public
+    // reader that renders it cannot leak anything whatever it does. The secret
+    // lives in a column no route returns.
+    const row = await opened();
+    expect((await raffleById(row.id))?.seed).toBeNull();
+
+    const stored = await queryOne<{ seed_secret: string | null }>(
+      `SELECT seed_secret FROM raffles WHERE id = $1`,
+      [row.id],
+    );
+    expect(stored?.seed_secret).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("refuses to draw a raffle whose stored seed is missing", async () => {
+    // A raffle whose commitment was published and whose secret was lost can
+    // never be drawn honestly. Refusing here means it surfaces to an operator
+    // rather than at a hash comparison on a public page.
+    const row = await closedWithTickets();
+    await query(`UPDATE raffles SET seed_secret = NULL WHERE id = $1`, [row.id]);
+    expect(await recordDraw(row.id, DRAW)).toEqual({ ok: false, reason: "no_seed" });
   });
 
   it("refuses to draw a raffle that is still open", async () => {
@@ -304,7 +342,6 @@ describe("recordPayout", () => {
     await sellTickets(row.id, 2);
     await advanceRaffle(row.id);
     await recordDraw(row.id, {
-      seed: "e".repeat(64),
       drawBlockhash: "EETubP5AKHgjPAhzPAFcb8BAY1hMH639CWCFTqi3teA9",
       winnerWallet: OTHER_WALLET,
       winningTicket: 1,
@@ -365,7 +402,6 @@ describe("cancelRaffle", () => {
     await sellTickets(row.id, 1);
     await advanceRaffle(row.id);
     await recordDraw(row.id, {
-      seed: "f".repeat(64),
       drawBlockhash: "EETubP5AKHgjPAhzPAFcb8BAY1hMH639CWCFTqi3teA9",
       winnerWallet: OTHER_WALLET,
       winningTicket: 1,

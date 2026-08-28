@@ -52,6 +52,7 @@ export type Raffle = {
   escrowSignature: string | null;
   status: RaffleStatus;
   seedHash: string;
+  /** The REVEALED seed. Null until the draw — safe for any public reader. */
   seed: string | null;
   drawSlot: bigint;
   drawBlockhash: string | null;
@@ -160,8 +161,18 @@ export type CreateDraftInput = {
   /** Announced at creation. Names a slot that does not exist yet. */
   drawSlot: bigint;
   endsAt: Date;
-  /** From `commitSeed()`. The seed itself is held by the caller until the draw. */
+  /** From `commitSeed()`. Published immediately. */
   seedHash: string;
+  /**
+   * From `commitSeed()`. Written to `seed_secret` and never published until the
+   * draw copies it into `seed` (migration 003).
+   *
+   * Taken here rather than left to a follow-up UPDATE so that a draft either
+   * has its secret or does not exist. A raffle whose commitment was published
+   * and whose seed was lost between two statements is a raffle nobody can ever
+   * draw, and the public page would show it as withheld.
+   */
+  seedSecret: string;
 };
 
 export type CreateDraftResult =
@@ -187,8 +198,8 @@ export async function createDraft(input: CreateDraftInput): Promise<CreateDraftR
     const row = await queryOne<RaffleRow>(
       `INSERT INTO raffles
          (id, slug, seller_wallet, prize_mint, collection_id, ticket_price_lamports,
-          max_tickets, house_fee_bps, seed_hash, draw_slot, ends_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+          max_tickets, house_fee_bps, seed_hash, seed_secret, draw_slot, ends_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
        RETURNING ${COLUMNS}`,
       [
         id,
@@ -200,6 +211,7 @@ export async function createDraft(input: CreateDraftInput): Promise<CreateDraftR
         input.maxTickets,
         input.houseFeeBps,
         input.seedHash,
+        input.seedSecret,
         input.drawSlot.toString(),
         input.endsAt,
       ],
@@ -294,7 +306,10 @@ export async function advanceRaffle(id: string): Promise<Raffle | null> {
 
 export type DrawResult =
   | { ok: true; raffle: Raffle }
-  | { ok: false; reason: "not_found" | "not_closed" | "no_such_ticket" | "winner_mismatch" };
+  | {
+      ok: false;
+      reason: "not_found" | "not_closed" | "no_such_ticket" | "winner_mismatch" | "no_seed";
+    };
 
 /**
  * Records the reveal and the winner, in one transaction.
@@ -306,21 +321,39 @@ export type DrawResult =
  * payout to the wrong wallet on a page that says it was fair.
  *
  * `status = 'closed'` in the predicate is what makes drawing exactly once
- * possible, and it is also what stops an early draw: a seed revealed while
- * tickets are still selling lets anybody who reads it compute the winning
- * number and buy exactly that ticket.
+ * possible, and it is also what stops an early draw.
+ *
+ * The seed is read from `seed_secret` and copied into `seed`, which is what
+ * publishes it. Before this runs, `seed` is NULL and any public reader that
+ * renders it shows nothing — see migration 003 for why that split exists.
  */
 export async function recordDraw(
   id: string,
-  draw: { seed: string; drawBlockhash: string; winnerWallet: string; winningTicket: number },
+  draw: { drawBlockhash: string; winnerWallet: string; winningTicket: number },
 ): Promise<DrawResult> {
   return transaction(async (client) => {
-    const locked = await client.query<{ status: RaffleStatus }>(
-      `SELECT status FROM raffles WHERE id = $1 FOR UPDATE`,
+    const locked = await client.query<{ status: RaffleStatus; seed_secret: string | null }>(
+      `SELECT status, seed_secret FROM raffles WHERE id = $1 FOR UPDATE`,
       [id],
     );
     if (locked.rowCount === 0) return { ok: false, reason: "not_found" };
     if (locked.rows[0].status !== "closed") return { ok: false, reason: "not_closed" };
+
+    /**
+     * THE REVEALED SEED IS THE STORED ONE, never a value a caller passed in.
+     *
+     * This function used to take the seed as an argument, which meant the
+     * published value came from whoever called it rather than from the row the
+     * commitment was made against. A caller with a bug — or a route reading the
+     * wrong field — could have published a seed that does not hash to
+     * `seed_hash`, and the failure would have surfaced on the public
+     * verification page, after the prize had been sent.
+     *
+     * Reading it here makes that unrepresentable: the only seed this can
+     * publish is the one written when the commitment was.
+     */
+    const seedSecret = locked.rows[0].seed_secret;
+    if (!seedSecret) return { ok: false, reason: "no_seed" };
 
     const ticket = await client.query<{ wallet: string }>(
       `SELECT wallet FROM tickets WHERE raffle_id = $1 AND number = $2`,
@@ -341,7 +374,7 @@ export async function recordDraw(
               drawn_at = now()
         WHERE id = $1
         RETURNING ${COLUMNS}`,
-      [id, draw.seed, draw.drawBlockhash, draw.winnerWallet, draw.winningTicket],
+      [id, seedSecret, draw.drawBlockhash, draw.winnerWallet, draw.winningTicket],
     );
     return { ok: true, raffle: toRaffle(updated.rows[0]) };
   });

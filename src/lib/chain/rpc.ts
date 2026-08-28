@@ -173,3 +173,25 @@ export async function blockhashForSlot(slot: bigint): Promise<string | null> {
   const blockhash = (result as { blockhash?: unknown } | null)?.blockhash;
   return typeof blockhash === "string" && blockhash.length > 0 ? blockhash : null;
 }
+
+/**
+ * The chain's current slot.
+ *
+ * Used once, when a raffle is created, to work out which future slot to
+ * announce. Deliberately `confirmed` rather than `processed`: a processed slot
+ * can be rolled back, and announcing a slot derived from one that never
+ * finalises would put the commitment's reference point somewhere the chain
+ * later disagrees about.
+ *
+ * WHO CALLS THIS: `POST /api/raffles`, and nothing else.
+ */
+export async function currentSlot(): Promise<bigint | null> {
+  try {
+    const result = await rpcCall(primaryEndpoint(), "getSlot", [{ commitment: RPC_COMMITMENT }]);
+    return typeof result === "number" ? BigInt(result) : null;
+  } catch {
+    // Fails closed at the caller: a raffle whose announced slot could not be
+    // computed must not be created with a guessed one.
+    return null;
+  }
+}

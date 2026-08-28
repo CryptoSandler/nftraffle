@@ -10,6 +10,19 @@ const BUYER = "3Nq7EtQe3aUZLxRUkzYq9c6DdShxWFRp3wY4qWCTGVAH";
 
 let counter = 0;
 
+/**
+ * A commitment and its secret, the pair `createDraft` needs.
+ *
+ * The secret is written at creation and only copied into the published `seed`
+ * at the draw (migration 003), so a fixture that supplied a hash without a
+ * secret would create a raffle nobody could ever draw.
+ */
+function seedPair() {
+  const { seed, seedHash } = commitSeed();
+  return { seedHash, seedSecret: seed };
+}
+
+
 async function raffle(overrides: Partial<Parameters<typeof createDraft>[0]> = {}) {
   counter += 1;
   const created = await createDraft({
@@ -22,7 +35,7 @@ async function raffle(overrides: Partial<Parameters<typeof createDraft>[0]> = {}
     houseFeeBps: 500,
     drawSlot: 500_000_000n + BigInt(counter),
     endsAt: new Date(Date.now() + 3600_000),
-    seedHash: commitSeed().seedHash,
+    ...seedPair(),
     ...overrides,
   });
   if (!created.ok) throw new Error(created.reason);
@@ -98,7 +111,6 @@ describe("the payout queue carries what an operator has to send", () => {
     expect(
       (
         await recordDraw(row.id, {
-          seed: "a".repeat(64),
           drawBlockhash: "EETubP5AKHgjPAhzPAFcb8BAY1hMH639CWCFTqi3teA9",
           winnerWallet: BUYER,
           winningTicket: 1,
@@ -127,7 +139,6 @@ describe("the payout queue carries what an operator has to send", () => {
     expect(
       (
         await recordDraw(row.id, {
-          seed: "b".repeat(64),
           drawBlockhash: "EETubP5AKHgjPAhzPAFcb8BAY1hMH639CWCFTqi3teA9",
           winnerWallet: BUYER,
           winningTicket: 2,
