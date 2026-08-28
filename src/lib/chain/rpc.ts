@@ -11,7 +11,8 @@ import { RPC_BACKOFF_MAX_MS, RPC_BACKOFF_MS, RPC_COMMITMENT, RPC_MAX_ATTEMPTS, s
  *
  * WHO CALLS THIS: `payments/sol-transfer.ts` (ticket payments, listing fees,
  * launch fees, and the SOL leg of a payout), `chain/das.ts` (asset ownership and
- * metadata), and `raffles/draw.ts` (the announced slot's blockhash).
+ * metadata), and `POST /api/admin/raffles/[id]/draw` (the announced slot's
+ * blockhash).
  */
 
 /** Enough of the parsed transaction to name who signed and paid the fee. */
@@ -131,4 +132,44 @@ export async function rpcCall(
 /** The first configured endpoint, which is the one the server calls directly. */
 export function primaryEndpoint(): string {
   return solanaRpcUrls()[0];
+}
+
+/**
+ * The blockhash of one slot, or null when the chain does not have it.
+ *
+ * The draw's second ingredient. `getBlock` is asked for the minimum: no
+ * transactions, no rewards, no signatures — just the header. A raffle's draw
+ * needs one 32-byte value, and pulling a whole block to read it would be a
+ * multi-megabyte response on a busy slot, on a paid provider, per draw.
+ *
+ * `null` rather than a throw for a slot that was SKIPPED, which is a real and
+ * ordinary thing on Solana: not every slot produces a block. The caller decides
+ * what to do about it, and this project's caller REFUSES — it does not walk
+ * forward to the next produced slot. Which slot the draw uses is part of what
+ * was announced when the raffle was created, so quietly substituting another
+ * would make the published method a description of something else. An operator
+ * whose announced slot was skipped has a raffle that must be cancelled, not one
+ * that gets drawn against a slot nobody was told about.
+ *
+ * WHO CALLS THIS: `POST /api/admin/raffles/[id]/draw`, and nothing else.
+ */
+export async function blockhashForSlot(slot: bigint): Promise<string | null> {
+  let result: unknown;
+  try {
+    result = await rpcCall(primaryEndpoint(), "getBlock", [
+      Number(slot),
+      {
+        encoding: "json",
+        transactionDetails: "none",
+        rewards: false,
+        maxSupportedTransactionVersion: 0,
+      },
+    ]);
+  } catch {
+    // A skipped slot is reported by some providers as a JSON-RPC error rather
+    // than a null result, so both shapes have to mean the same thing here.
+    return null;
+  }
+  const blockhash = (result as { blockhash?: unknown } | null)?.blockhash;
+  return typeof blockhash === "string" && blockhash.length > 0 ? blockhash : null;
 }
