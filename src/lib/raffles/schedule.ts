@@ -79,7 +79,8 @@ export const SELLER_LIMITS = {
    * closed, so nothing can hit it yet.
    * **The owner's decision (docs/decisions.md Q13): shared now, split per chain
    * the day the Robinhood surface opens, not before.** Nothing can reach the
-   * wrong value in the meantime, because `OPEN_CHAINS` closes that chain.
+   * wrong value in the meantime, because Robinhood has no configuration on any
+   * live deployment yet (docs/decisions.md Q17).
    * // ponytail: single ceiling; make it per-chain as item 1 of the
    * // "Opening the second chain" checklist in docs/operations.md.
    */

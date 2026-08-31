@@ -160,47 +160,113 @@ describe("surfaceRefusal", () => {
   });
 });
 
-describe("a chain can be closed regardless of its configuration", () => {
-  it("keeps Robinhood Chain closed even when everything is set", () => {
+describe("configuration is what opens a chain, and nothing else is", () => {
+  it("opens Robinhood only when every variable it needs is set", () => {
     /**
-     * The approved sequence: the Robinhood adapter is built and tested, and its
-     * surface stays shut until one real raffle has run end to end on Solana
-     * (docs/decisions.md). Removing "robinhood" from OPEN_CHAINS is the whole of
-     * "open the second chain" — this test is what stops that happening by
-     * accident, e.g. by someone setting the variables and assuming that is the
-     * switch.
+     * **This test replaces one that asserted the opposite**, and the reason is
+     * recorded rather than implied: Robinhood used to be held shut by a
+     * hard-coded set, because the approved sequence was Solana first. The owner
+     * reversed that on 2026-08-31 (docs/decisions.md Q17), so the condition the
+     * set encoded stopped existing.
+     *
+     * What must stay true is that a HALF-configured chain never opens. A
+     * deployment with an RPC endpoint but no escrow wallet can take money it
+     * cannot custody, which is worse than one that takes none.
      */
-    process.env.ROBINHOOD_RPC_URL = "https://rpc.testnet.chain.robinhood.com";
-    process.env.PAYMENT_WALLET_ROBINHOOD = "0x1111111111111111111111111111111111111111";
-    process.env.ESCROW_WALLET_ROBINHOOD = "0x2222222222222222222222222222222222222222";
-    process.env.RAFFLE_LISTING_FEE_ROBINHOOD = "0.01";
-    process.env.HOUSE_FEE_BPS_ROBINHOOD = "500";
-    process.env.LAUNCH_FEE_ROBINHOOD = "0.1";
-    process.env.MINT_FEE_BPS_ROBINHOOD = "300";
+    const vars = {
+      ROBINHOOD_RPC_URL: "https://rpc.testnet.chain.robinhood.com",
+      PAYMENT_WALLET_ROBINHOOD: "0x1111111111111111111111111111111111111111",
+      ESCROW_WALLET_ROBINHOOD: "0x2222222222222222222222222222222222222222",
+      RAFFLE_LISTING_FEE_ROBINHOOD: "0.01",
+      HOUSE_FEE_BPS_ROBINHOOD: "500",
+      LAUNCH_FEE_ROBINHOOD: "0.1",
+      MINT_FEE_BPS_ROBINHOOD: "300",
+    };
+    for (const [k, v] of Object.entries(vars)) process.env[k] = v;
 
     for (const surface of ["buy_tickets", "list_raffle", "launch_collection"] as const) {
-      expect(surfaceState(surface, "robinhood").open, surface).toBe(false);
+      expect(surfaceState(surface, "robinhood").open, surface).toBe(true);
     }
 
-    for (const name of [
-      "ROBINHOOD_RPC_URL", "PAYMENT_WALLET_ROBINHOOD", "ESCROW_WALLET_ROBINHOOD",
-      "RAFFLE_LISTING_FEE_ROBINHOOD", "HOUSE_FEE_BPS_ROBINHOOD", "LAUNCH_FEE_ROBINHOOD",
-      "MINT_FEE_BPS_ROBINHOOD",
-    ]) delete process.env[name];
+    /**
+     * Every variable is load-bearing for at least one surface.
+     *
+     * NOT "every variable closes every surface" — that was the first version of
+     * this assertion and it was simply false: escrow holds the prize, so it
+     * gates LISTING a raffle and has nothing to do with buying a ticket. A test
+     * that overstates the rule gets weakened by the next person rather than
+     * read.
+     */
+    for (const name of Object.keys(vars)) {
+      const kept = process.env[name];
+      delete process.env[name];
+      const closed = (["buy_tickets", "list_raffle", "launch_collection"] as const).filter(
+        (surface) => !surfaceState(surface, "robinhood").open,
+      );
+      expect(closed.length, `${name} should gate at least one surface`).toBeGreaterThan(0);
+      process.env[name] = kept;
+    }
+
+    // And the two that decide where money and property go, named explicitly.
+    delete process.env.PAYMENT_WALLET_ROBINHOOD;
+    expect(surfaceState("buy_tickets", "robinhood").open).toBe(false);
+    process.env.PAYMENT_WALLET_ROBINHOOD = vars.PAYMENT_WALLET_ROBINHOOD;
+
+    delete process.env.ESCROW_WALLET_ROBINHOOD;
+    expect(surfaceState("list_raffle", "robinhood").open).toBe(false);
+    process.env.ESCROW_WALLET_ROBINHOOD = vars.ESCROW_WALLET_ROBINHOOD;
+
+    for (const name of Object.keys(vars)) delete process.env[name];
   });
 
-  it("does not tell a visitor which of a closed chain's variables are missing", () => {
-    // A chain that is not open should not report its configuration gaps: that
-    // is a roadmap rather than an answer.
+  it("does not tell a visitor which variables are missing", () => {
+    // A closed surface should not report its configuration gaps: that is a
+    // roadmap rather than an answer.
     const state = surfaceState("buy_tickets", "robinhood");
     if (state.open) throw new Error("expected closed");
     expect(state.message).not.toMatch(/ROBINHOOD|RPC|WALLET|FEE/);
     // The operator still learns it from the log side.
-    expect(state.reason).toContain("chain not open");
+    expect(state.reason.length).toBeGreaterThan(0);
   });
 
   it("leaves Solana open when Solana is configured", () => {
     configureAll();
     expect(surfaceState("buy_tickets", "solana").open).toBe(true);
+  });
+});
+
+describe("wallet validation knows which chain it is reading for", () => {
+  /**
+   * THE BUG THIS CATCHES, found while opening the Robinhood surface.
+   *
+   * `readWallet` base58-decoded every address and required 32 bytes, whatever
+   * chain it was asked about. A perfectly valid EVM address failed that, so a
+   * fully configured Robinhood deployment reported itself unconfigured — and
+   * the visitor-facing message is the same either way, so it looked like a
+   * missing variable rather than a rejected one.
+   *
+   * It is asserted in both directions on purpose. A validator that accepted
+   * everything would also make the "configured" case pass.
+   */
+  it("accepts an EVM address for Robinhood and refuses a Solana one", async () => {
+    const { paymentWallet } = await import("../payments/config");
+    process.env.PAYMENT_WALLET_ROBINHOOD = "0x1111111111111111111111111111111111111111";
+    expect(paymentWallet("robinhood").ok).toBe(true);
+
+    process.env.PAYMENT_WALLET_ROBINHOOD = "F7FfSamtLjDwEx4cpHDV6EqtYjXf8HMDyiF98FbNogXE";
+    expect(paymentWallet("robinhood").ok).toBe(false);
+    delete process.env.PAYMENT_WALLET_ROBINHOOD;
+  });
+
+  it("accepts a Solana address for Solana and refuses an EVM one", async () => {
+    const { escrowWallet } = await import("../payments/config");
+    process.env.ESCROW_WALLET_SOLANA = "F7FfSamtLjDwEx4cpHDV6EqtYjXf8HMDyiF98FbNogXE";
+    expect(escrowWallet("solana").ok).toBe(true);
+
+    // The direction that actually loses money: an EVM address configured as a
+    // Solana escrow is a wallet nothing on Solana can ever send to.
+    process.env.ESCROW_WALLET_SOLANA = "0x1111111111111111111111111111111111111111";
+    expect(escrowWallet("solana").ok).toBe(false);
+    delete process.env.ESCROW_WALLET_SOLANA;
   });
 });

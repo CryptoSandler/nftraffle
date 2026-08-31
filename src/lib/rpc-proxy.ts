@@ -1,10 +1,22 @@
-import { identify, json, NO_STORE, refuseForeignOrigin } from "../../../lib/http";
-import { rpcConfigured, solanaRpcUrls } from "../../../lib/payments/config";
-
-export const dynamic = "force-dynamic";
+import { identify, json, NO_STORE, refuseForeignOrigin } from "./http";
+import { evmRpcUrls, rpcConfigured, solanaRpcUrls } from "./payments/config";
+import type { ChainId } from "./chain/adapter";
 
 /**
- * A server-side proxy onto the configured Solana RPC endpoint.
+ * A server-side proxy onto a configured RPC endpoint, one chain at a time.
+ *
+ * **On the chain being a path parameter.** The Solana-only version of this file
+ * said a second chain "needs its own proxy rather than a chain parameter here —
+ * a caller-selected upstream is a caller-selected upstream." That concern is
+ * real and it is answered by the shape rather than by splitting the file: the
+ * caller does not name an upstream, it names one of two compile-time chain ids,
+ * validated by `isChainId` before anything here runs, and each maps to a fixed
+ * environment variable. That is the same closed-set dispatch `adapterFor(chain)`
+ * already does everywhere else in this codebase.
+ *
+ * The alternative — two route files — means two copies of the batch check, the
+ * body cap, the rate limiter and the no-relay discipline below. Those are the
+ * parts that must never drift, and a second copy is how they do.
  *
  * Publishing that endpoint to the browser hands a paid provider's key to
  * anyone who opens dev tools, and widening the site's CSP `connect-src` past
@@ -17,6 +29,8 @@ export const dynamic = "force-dynamic";
  * not like is not a whitelist — a caller could still spend a paid request
  * against our provider on any method it wants. Every rejection below
  * happens before `forward()` is ever called.
+ *
+ * WHO CALLS THIS: `src/app/api/rpc/[chain]/route.ts`, and nothing else.
  */
 
 /**
@@ -46,7 +60,7 @@ export const dynamic = "force-dynamic";
  * a metered, method-limited proxy into a general-purpose indexer somebody else
  * can point their app at and we pay for.
  */
-const ALLOWED_METHODS = new Set<string>([
+const SOLANA_METHODS = new Set<string>([
   "getLatestBlockhash",
   "sendTransaction",
   "getSignatureStatuses",
@@ -60,6 +74,46 @@ const ALLOWED_METHODS = new Set<string>([
 ]);
 
 /**
+ * Robinhood Chain's list, and it is deliberately READ-ONLY.
+ *
+ * **`eth_sendRawTransaction` is absent on purpose.** On Solana the browser has
+ * to reach a node to submit, because the wallet hands back signed bytes. An
+ * EIP-1193 wallet submits through its OWN node, so nothing in this product
+ * needs a send path here — and a proxy that will relay a signed transaction is
+ * a public transaction relay somebody else can point an app at and we pay for.
+ *
+ * What the browser actually needs is the little it takes to check it is on the
+ * right chain and to watch a transaction land:
+ * - eth_chainId, eth_blockNumber: which chain, and how far along.
+ * - eth_getTransactionByHash, eth_getTransactionReceipt: did it land, did it
+ *   succeed.
+ * - eth_getBlockByNumber: the timestamp behind a confirmation.
+ * - eth_call: reading a token's owner or its `tokenURI` for display.
+ *
+ * Not eth_getLogs: an unbounded range query is an indexer, which is the same
+ * objection as `getProgramAccounts` on the Solana list.
+ */
+const ROBINHOOD_METHODS = new Set<string>([
+  "eth_chainId",
+  "eth_blockNumber",
+  "eth_getTransactionByHash",
+  "eth_getTransactionReceipt",
+  "eth_getBlockByNumber",
+  "eth_call",
+]);
+
+const ALLOWED_METHODS: Record<ChainId, ReadonlySet<string>> = {
+  solana: SOLANA_METHODS,
+  robinhood: ROBINHOOD_METHODS,
+};
+
+/** The upstream for a chain. One fixed environment variable each. */
+const UPSTREAMS: Record<ChainId, () => string[]> = {
+  solana: solanaRpcUrls,
+  robinhood: evmRpcUrls,
+};
+
+/**
  * JSON-RPC allows a batch: an array of call objects, not just one. A
  * whitelist that only inspects `body.method` waves an entire batch through
  * on the strength of never looking past its first element. Both shapes are
@@ -67,7 +121,8 @@ const ALLOWED_METHODS = new Set<string>([
  * member names a method outside the whitelist — a batch is one request, not
  * several independent ones, and this proxy does not forward part of it.
  */
-function isWhitelistedRequest(payload: unknown): boolean {
+function isWhitelistedRequest(payload: unknown, chain: ChainId): boolean {
+  const allowed = ALLOWED_METHODS[chain];
   const calls = Array.isArray(payload) ? payload : [payload];
   if (calls.length === 0) return false;
   return calls.every(
@@ -75,7 +130,7 @@ function isWhitelistedRequest(payload: unknown): boolean {
       typeof call === "object" &&
       call !== null &&
       typeof (call as { method?: unknown }).method === "string" &&
-      ALLOWED_METHODS.has((call as { method: string }).method),
+      allowed.has((call as { method: string }).method),
   );
 }
 
@@ -216,7 +271,7 @@ function isJsonRpcResponse(value: unknown): value is { result?: unknown; error?:
  */
 const GENERIC_UPSTREAM_ERROR = {
   code: -32000,
-  message: "The Solana network could not complete this request. Try again in a moment.",
+  message: "The network could not complete this request. Try again in a moment.",
 } as const;
 
 /** Every id in `ids`, answered with the same generic failure. */
@@ -280,8 +335,8 @@ function safeEntry(id: JsonRpcId, entry: { result?: unknown; error?: unknown }):
  * the same discipline the content check above applies to a response that
  * did come back.
  */
-async function forward(payload: unknown): Promise<{ status: number; body: unknown }> {
-  const endpoint = solanaRpcUrls()[0];
+async function forward(payload: unknown, chain: ChainId): Promise<{ status: number; body: unknown }> {
+  const endpoint = UPSTREAMS[chain]()[0];
   const ids = requestIds(payload);
   const isBatch = Array.isArray(payload);
 
@@ -341,7 +396,7 @@ async function forward(payload: unknown): Promise<{ status: number; body: unknow
   return { status: 200, body: safeEntry(ids[0], parsed) };
 }
 
-export async function POST(request: Request): Promise<Response> {
+export async function proxyRpc(request: Request, chain: ChainId): Promise<Response> {
   /**
    * NOT ON THE AUDIT'S LIST, and added anyway — same class, same money.
    *
@@ -349,7 +404,7 @@ export async function POST(request: Request): Promise<Response> {
    * leaving the server. Nothing else legitimately calls it: the browser talks
    * to it same-origin, and no server-side code goes through it. Without this,
    * any page on the internet can point a `Connection` at
-   * this deployment's `/api/rpc` and spend our provider quota — metered per
+   * this deployment's `/api/rpc/<chain>` and spend our provider quota — metered per
    * caller, allowlisted by method, and still ours to pay for.
    *
    * A request with no Origin is still allowed, like everywhere else this
@@ -361,14 +416,10 @@ export async function POST(request: Request): Promise<Response> {
   // `SOLANA_RPC_URL` has no default in this project (see payments/config.ts),
   // so an unconfigured deployment has no upstream at all. Answered before the
   // caller is identified: there is nothing to meter access to.
-  if (!rpcConfigured("solana")) {
-    // Solana only: this proxy exists so the BROWSER can reach a Solana node
-    // without learning the endpoint. The Robinhood surface is closed, and when
-    // it opens it needs its own proxy rather than a chain parameter here —
-    // a caller-selected upstream is a caller-selected upstream.
-    console.error("POST /api/rpc: SOLANA_RPC_URL is not set; refusing every request.");
+  if (!rpcConfigured(chain)) {
+    console.error(`POST /api/rpc/${chain}: no RPC URL configured; refusing every request.`);
     return json(
-      { error: "This deployment has no Solana connection configured." },
+      { error: "This deployment has no connection to that chain configured." },
       { status: 503, headers: NO_STORE },
     );
   }
@@ -378,7 +429,9 @@ export async function POST(request: Request): Promise<Response> {
 
   // Rate-limited before the RPC call it exists to protect, never after:
   // there is no quota left to save once the call already happened.
-  if (tooManyRpcCalls(caller.ipHash)) {
+  // Bucketed PER CHAIN as well as per address, so a caller cannot spend one
+  // chain's budget reading the other.
+  if (tooManyRpcCalls(`${chain}:${caller.ipHash}`)) {
     return json(
       { error: "Too many RPC requests from this address. Try again shortly." },
       { status: 429, headers: NO_STORE },
@@ -400,13 +453,13 @@ export async function POST(request: Request): Promise<Response> {
     return json({ error: "Body must be JSON." }, { status: 400, headers: NO_STORE });
   }
 
-  if (!isWhitelistedRequest(payload)) {
+  if (!isWhitelistedRequest(payload, chain)) {
     return json(
       { error: "That RPC method is not available through this proxy." },
       { status: 400, headers: NO_STORE },
     );
   }
 
-  const result = await forward(payload);
+  const result = await forward(payload, chain);
   return json(result.body, { status: result.status, headers: NO_STORE });
 }

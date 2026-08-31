@@ -65,20 +65,28 @@ const CLOSED_MESSAGES: Record<Surface, string> = {
  * surface is adding a row. Each entry returns a reason string or null.
  */
 /**
- * Chains whose surfaces are open at all, whatever their configuration.
+ * Chains this codebase will serve a money surface for at all.
  *
- * **Robinhood Chain is built and closed.** The approved sequence
- * (docs/decisions.md) keeps its surface shut until one real raffle has run end
- * to end on Solana — so that a bug in the shared core is found once, on the
- * chain that has the audience, rather than fixed twice or misattributed to an
- * adapter.
+ * **Robinhood Chain was in a hard-coded closed set and is not any more**
+ * (docs/decisions.md Q17). That set existed to hold it shut until one real
+ * Solana raffle had run; the owner reversed the sequence on 2026-08-31, so the
+ * condition it encoded no longer exists and leaving it would be a switch whose
+ * stated reason had stopped being true.
  *
- * This is the ONE place that opens, deliberately. Putting a second gate in the
- * config or in the adapter would mean two switches and a way to half-open.
- * Removing `robinhood` from this set is the whole of "open the second chain",
- * and the reason to do it is a green Solana raffle, not a green test suite.
+ * **What holds the surface shut now is CONFIGURATION, and it is stricter rather
+ * than looser.** A chain can only take money on a deployment that has a
+ * receiving wallet, an escrow wallet, a fee and an RPC endpoint for it — which
+ * is what `REQUIREMENTS` below already checks, per chain, and which production
+ * deliberately does not have for either chain. A second switch on top of that
+ * meant two things to change and a way to half-open one of them.
+ *
+ * The gate for Robinhood MAINNET is therefore not in this file and cannot be:
+ * it is the owner loading the environment, once
+ * `docs/testnet-rehearsal-robinhood.md` has passed whole. Code cannot enforce
+ * "the owner is satisfied", and pretending otherwise with a boolean is how a
+ * boolean gets flipped by somebody who is not the owner.
  */
-const OPEN_CHAINS: ReadonlySet<ChainId> = new Set<ChainId>(["solana"]);
+const OPEN_CHAINS: ReadonlySet<ChainId> = new Set<ChainId>(["solana", "robinhood"]);
 
 const CHAIN_CLOSED_MESSAGE =
   "This chain is not open on this deployment yet. Nothing has been charged.";

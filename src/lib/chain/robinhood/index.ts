@@ -14,6 +14,7 @@ import {
   type Erc721Asset,
 } from "./erc721";
 import { blockAtHeight, blockTimestampSeconds, currentBlockHeight, evmCall } from "./rpc";
+import { erc721Metadata } from "./metadata";
 import { findBlockAtOrAfter } from "../anchor";
 
 import { readErc721Transfer, readNativeTransfer } from "./transfer";
@@ -197,18 +198,33 @@ export const robinhoodAdapter: ChainAdapter = {
   },
 
   /**
-   * Metadata needs `tokenURI()` and then an off-chain fetch of JSON somebody
-   * else hosts, which is attacker-controlled content on a page we render.
+   * `tokenURI()` on chain, then a bounded fetch of the JSON it names.
    *
-   * **Not implemented in this batch, and null rather than a guess.** The bounds
-   * it needs — a size cap, a timeout, and refusing redirects into private
-   * address ranges — are a unit of work of their own, and a half-bounded fetch
-   * is worse than none. Pages render the asset reference until then.
-   * // ponytail: returns null; add the bounded tokenURI fetch when the
-   * // Robinhood surface is opened, not before.
+   * **The one place this product fetches a URL somebody else chose**, which is
+   * why every rule about it — scheme allowlist, no redirects, size cap,
+   * timeout, refused private hosts — lives in `chain/metadata-fetch.ts` rather
+   * than here. This method only joins the two halves and fills in the owner,
+   * which comes from the chain and not from the document.
+   *
+   * Null on any refusal, and pages render the asset reference instead. Metadata
+   * is decoration; the prize, the price and the draw are not.
    */
-  async assetMetadata(): Promise<AssetMetadata | null> {
-    return null;
+  async assetMetadata(asset): Promise<AssetMetadata | null> {
+    const parsed = parseErc721Asset(asset.raw);
+    if (!parsed) return null;
+
+    const [document, owner] = await Promise.all([erc721Metadata(parsed), this.assetOwner(asset)]);
+    if (!document) return null;
+
+    return {
+      // The document names itself; if it does not, the token reference does.
+      name: document.name ?? asset.display,
+      image: document.image,
+      collection: document.collection,
+      // NEVER from the document. Ownership is a chain fact, and a metadata file
+      // claiming an owner is a metadata file lying about one.
+      owner,
+    };
   },
 
   currentHeight: currentBlockHeight,

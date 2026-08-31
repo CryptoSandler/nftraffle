@@ -88,7 +88,7 @@ export function BuyTickets({
       setPhase({ step: "working", note: "Waiting for your wallet…" });
 
       // The blockhash comes through our proxy, like every other chain read.
-      const blockhashResponse = await fetch("/api/rpc", {
+      const blockhashResponse = await fetch("/api/rpc/solana", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getLatestBlockhash", params: [] }),

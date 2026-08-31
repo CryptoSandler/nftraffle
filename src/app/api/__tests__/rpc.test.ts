@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { POST as rpcRoute } from "../rpc/route";
+import { proxyRpc } from "../../../lib/rpc-proxy";
+
+/**
+ * The route wrapper at `/api/rpc/[chain]` only validates the chain segment and
+ * hands over; every rule under test lives in the proxy, so these drive it
+ * directly and name the chain themselves.
+ */
+const rpcRoute = (request: Request) => proxyRpc(request, "solana");
 
 /**
  * The proxy the wallet adapter talks to instead of a Solana node directly.
@@ -14,7 +21,7 @@ import { POST as rpcRoute } from "../rpc/route";
 // TRUSTED_PLATFORM_HEADER unset, clientIp() reads x-forwarded-for, which is
 // the header that keeps two distinct IPs genuinely distinct in this suite.
 function post(body: unknown, ip = "1.2.3.4", extraHeaders: Record<string, string> = {}): Request {
-  return new Request("https://nftraffle.example/api/rpc", {
+  return new Request("https://nftraffle.example/api/rpc/solana", {
     method: "POST",
     headers: { "x-forwarded-for": ip, "content-type": "application/json", ...extraHeaders },
     body: JSON.stringify(body),
@@ -107,7 +114,7 @@ describe("POST /api/rpc", () => {
     const fetchMock = stubFetch(() => ({}));
 
     const response = await rpcRoute(
-      new Request("https://nftraffle.example/api/rpc", {
+      new Request("https://nftraffle.example/api/rpc/solana", {
         method: "POST",
         headers: { "x-forwarded-for": "1.2.3.4", "content-type": "application/json" },
         body: "{not json",
@@ -155,7 +162,7 @@ describe("POST /api/rpc", () => {
     delete process.env.ALLOW_UNTRUSTED_CLIENT_IP;
     try {
       const noAddress = await rpcRoute(
-        new Request("https://nftraffle.example/api/rpc", {
+        new Request("https://nftraffle.example/api/rpc/solana", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify(whitelistedCall()),
@@ -352,5 +359,101 @@ describe("POST /api/rpc", () => {
       expect(fetchMock, method).toHaveBeenCalledTimes(1);
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe("the whitelist is PER CHAIN, not shared", () => {
+  /**
+   * The risk the per-chain route introduces, tested directly.
+   *
+   * One proxy serving two chains is only safe if the method lists stay
+   * separate. A shared list would mean a caller could spend the Solana
+   * provider's quota on `eth_call` — refused upstream, but paid for by us — and,
+   * worse, that adding a method for one chain silently adds it for the other.
+   */
+  const robinhood = (request: Request) => proxyRpc(request, "robinhood");
+
+  beforeEach(() => {
+    process.env.SOLANA_RPC_URL = "https://rpc.example/solana";
+    process.env.ROBINHOOD_RPC_URL = "https://rpc.example/robinhood";
+  });
+
+  it("refuses an EVM method on the Solana proxy", async () => {
+    const response = await rpcRoute(
+      new Request("https://nftraffle.example/api/rpc/solana", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [] }),
+      }),
+    );
+    expect(response.status).toBe(400);
+  });
+
+  it("refuses a Solana method on the Robinhood proxy", async () => {
+    const response = await robinhood(
+      new Request("https://nftraffle.example/api/rpc/robinhood", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getAsset", params: [] }),
+      }),
+    );
+    expect(response.status).toBe(400);
+  });
+
+  it("refuses eth_sendRawTransaction, which would make this a public relay", async () => {
+    // An EIP-1193 wallet submits through its own node, so nothing in this
+    // product needs a send path here. Adding one would hand anybody a
+    // transaction relay on our provider's bill.
+    const response = await robinhood(
+      new Request("https://nftraffle.example/api/rpc/robinhood", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_sendRawTransaction", params: ["0x00"] }),
+      }),
+    );
+    expect(response.status).toBe(400);
+  });
+
+  it("refuses eth_getLogs, which would make this an indexer", async () => {
+    const response = await robinhood(
+      new Request("https://nftraffle.example/api/rpc/robinhood", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_getLogs", params: [{}] }),
+      }),
+    );
+    expect(response.status).toBe(400);
+  });
+
+  it("control: a method that IS on the Robinhood list gets past the whitelist", async () => {
+    // Without this, every assertion above would also pass against a proxy that
+    // refused everything — which is the shape a broken check takes.
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, result: "0x1234" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    const response = await robinhood(
+      new Request("https://nftraffle.example/api/rpc/robinhood", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_chainId", params: [] }),
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(fetchSpy).toHaveBeenCalled();
+    fetchSpy.mockRestore();
+  });
+
+  it("refuses every chain that is not one of the two", async () => {
+    // The route wrapper's job. A caller-named upstream is exactly what the
+    // Solana-only version of this proxy warned against.
+    const { POST } = await import("../rpc/[chain]/route");
+    const response = await POST(
+      new Request("https://nftraffle.example/api/rpc/ethereum", { method: "POST", body: "{}" }),
+      { params: Promise.resolve({ chain: "ethereum" }) } as never,
+    );
+    expect(response.status).toBe(404);
   });
 });

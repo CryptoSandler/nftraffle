@@ -70,13 +70,37 @@ export type WalletResult = { ok: true; address: string } | { ok: false; reason: 
  * The absence of either wallet is a first-class product state, not an error:
  * the surfaces that need it close with their own screen (spec §6).
  */
-function readWallet(name: string): WalletResult {
+/**
+ * Address shapes, per chain.
+ *
+ * **This used to be Solana-only, and it silently closed every Robinhood
+ * surface.** `isAddressShaped` base58-decodes and requires 32 bytes; a
+ * perfectly good EVM address fails that and was reported as "not a valid
+ * Solana address" — from a function that had no idea which chain it was reading
+ * for. The failure was indistinguishable from "not configured", so a fully
+ * configured EVM deployment looked unconfigured.
+ *
+ * Checked here rather than through `adapterFor(chain).isAddress` because the
+ * adapters import this module, and an import cycle between configuration and
+ * the things configured by it is a worse problem than two regexes.
+ */
+const ADDRESS_SHAPE: Record<ChainId, (value: string) => boolean> = {
+  solana: isAddressShaped,
+  robinhood: (value) => /^0x[0-9a-fA-F]{40}$/.test(value),
+};
+
+const CHAIN_LABEL: Record<ChainId, string> = {
+  solana: "Solana",
+  robinhood: "Robinhood Chain",
+};
+
+function readWallet(name: string, chain: ChainId): WalletResult {
   const raw = process.env[name]?.trim();
   if (!raw) {
     return { ok: false, reason: `This deployment has no ${name} configured.` };
   }
-  if (!isAddressShaped(raw)) {
-    return { ok: false, reason: `${name} is not a valid Solana address.` };
+  if (!ADDRESS_SHAPE[chain](raw)) {
+    return { ok: false, reason: `${name} is not a valid ${CHAIN_LABEL[chain]} address.` };
   }
   return { ok: true, address: raw };
 }
@@ -89,7 +113,7 @@ function readWallet(name: string): WalletResult {
  * address and neither can receive the other's funds.
  */
 export function paymentWallet(chain: ChainId): WalletResult {
-  return readWallet(`PAYMENT_WALLET_${ENV_SUFFIX[chain]}`);
+  return readWallet(`PAYMENT_WALLET_${ENV_SUFFIX[chain]}`, chain);
 }
 
 /**
@@ -101,7 +125,7 @@ export function paymentWallet(chain: ChainId): WalletResult {
  * this codebase's only job is to verify that it happened.
  */
 export function escrowWallet(chain: ChainId): WalletResult {
-  return readWallet(`ESCROW_WALLET_${ENV_SUFFIX[chain]}`);
+  return readWallet(`ESCROW_WALLET_${ENV_SUFFIX[chain]}`, chain);
 }
 
 // --- RPC ---------------------------------------------------------------------

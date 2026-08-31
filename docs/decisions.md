@@ -578,6 +578,95 @@ script without exposing it to the public, and at that point the rehearsal should
 run against the real URL and this decision should be reversed rather than
 inherited.
 
+## Q17 — Robinhood Chain goes first; the gate is a green testnet runbook
+
+**The owner reversed the approved sequence on 2026-08-31.** It was Solana first,
+one real raffle end to end, and only then Robinhood. It is now Robinhood first,
+and the door that opens its surface is no longer a real Solana raffle — it is
+`docs/testnet-rehearsal-robinhood.md` passing whole, with every negative
+refusing.
+
+**The reason, in the owner's words: that is where the volume is.** This is a
+distribution judgement, not a technical one, and it is the owner's to make. The
+loop in DESIGN.md §1 is only a loop if somebody is there to complete it — a
+raffle that nobody sees does not bootstrap a collection, however correct its
+draw. A chain with an audience beats a chain we have already built for.
+
+### What this changes about the risk, stated honestly
+
+The old sequence bought one specific thing: **a bug in the shared core would be
+found once, on the chain with the mature tooling, rather than misattributed to
+an adapter.** Solana has an explorer everybody reads, a CLI that can move an
+asset in one line, and a devnet with faucets. Robinhood Chain has Blockscout and
+`cast`. When a payment does not verify there, the question "is this our bug or
+the chain's" is genuinely harder to answer, and we now ask it first.
+
+**Three things get riskier, and each has a specific mitigation already built:**
+
+1. **The shared core is exercised first by the less familiar adapter.** Mitigated
+   by the core being genuinely shared and already tested against Solana end to
+   end — `checkWindowAndPayer`, the escrow discipline, the payout evidence rules
+   and the draw anchor are all chain-agnostic and all passed a full devnet
+   rehearsal on 2026-08-31. What is new is the adapter, not the judgement.
+2. **The anchor's honesty is weaker on an Orbit chain and this now matters
+   first.** A single sequencer both orders blocks and stamps them, so "the hash
+   is unknowable" is true of us and not provably true of the sequencer. This was
+   always the case (Q7); the change is that it is now the FIRST thing a user
+   meets rather than the second. The verification page therefore has to carry
+   the narrower text before launch, not after — see item 2 of this batch.
+3. **Fewer eyes on a first mistake is now a bigger loss, because a first
+   impression on the chain with the volume is the one that counts.** Mitigated
+   by the gate: the testnet runbook is the same fourteen checks as devnet, ten of
+   them negatives, and a negative that does not refuse is a stop.
+
+**What does NOT change.** Production keeps its money surfaces closed until the
+owner loads the environment themselves. Nothing here opens a mainnet surface;
+the gate opens a TESTNET rehearsal, and mainnet is a separate decision the owner
+still holds.
+
+### Trigger to revisit
+
+A green testnet runbook that is followed by a Robinhood mainnet raffle which
+does not sell. At that point the distribution premise was wrong, and the honest
+response is to say so and go back to Solana rather than to keep building here.
+
+## Q18 — The payer binding exists on EVM and not on Solana
+
+**Decided: build it where the chain is opening, and say out loud that the other
+chain does not have it.** This is a gap, not a principle, and writing it down is
+what stops it being discovered later as a surprise.
+
+**What the binding does.** Opening an order on Robinhood requires a
+`personal_sign` proving the signer controls the address the order names
+(`lib/wallet/evm-binding.ts`). Settlement already refused a transfer whose
+`from` was not the order's payer; this closes the mirror image — opening an
+order in a STRANGER'S name and waiting for a transfer they made for their own
+reasons to land inside its window.
+
+**Why Solana has no equivalent yet.** The same hole exists there, bounded by the
+same 30-minute order window and the same 120-second skew. It is narrower in
+practice for an unglamorous reason: Solana's blocks are ~317 ms apart against
+Robinhood's ~101, and a Solana payer's transfer must also match the exact
+amount, the exact recipient and the window. None of that makes it safe — it
+makes it smaller.
+
+**Why not build both now.** Solana's version is not the same code: Wallet
+Standard exposes `solana:signMessage`, not `personal_sign`, and the message
+format, the wallet feature detection and the verification are all different. It
+is a unit of work, not a parameter, and this batch is opening the other chain.
+
+**What it costs to leave it.** One extra prompt on Robinhood that Solana does
+not show, which is a visible inconsistency between two panels. Accepted, because
+the alternative is either building a second signing path in a batch that is
+already opening a chain, or removing a real protection from the chain that is
+about to take money first.
+
+### Trigger to revisit
+
+The first Solana raffle that sells to strangers rather than to us. Before that
+the hole has no population to exploit it; after it, this should be levelled up
+rather than levelled down.
+
 ---
 
 ## Still open

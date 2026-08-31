@@ -93,7 +93,7 @@ export function useSolanaWallet() {
       const feature = wallet.wallet.features[SOLANA_SIGN_TRANSACTION] as SignFeature;
       const [{ signedTransaction }] = await feature.signTransaction({ account, transaction: bytes });
 
-      const response = await fetch("/api/rpc", {
+      const response = await fetch("/api/rpc/solana", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({

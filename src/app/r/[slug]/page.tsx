@@ -4,6 +4,8 @@ import { adapterFor } from "../../../lib/chain/registry";
 import { classifyEndpoints } from "../../../lib/chain/solana/cluster";
 import { solanaRpcUrls } from "../../../lib/payments/config";
 import { BuyTickets } from "../../../components/BuyTickets";
+import { BuyTicketsRobinhood } from "../../../components/BuyTicketsRobinhood";
+import { chainIdFor, robinhoodNetwork } from "../../../lib/chain/robinhood/network";
 import { advanceRaffle, raffleBySlug } from "../../../lib/raffles/lifecycle";
 import { payoutSplit } from "../../../lib/raffles/payout";
 import { ticketsSold } from "../../../lib/raffles/tickets";
@@ -34,6 +36,9 @@ export default async function RafflePage({ params }: PageProps<"/r/[slug]">) {
   });
   const chain = adapterFor(raffle.chain);
   const buyingClosed = surfaceRefusal("buy_tickets", raffle.chain, `GET /r/${slug}`);
+  // One classification per render, and only for the chain that needs it. A
+  // Solana raffle must not pay for an EVM round trip.
+  const robinhoodNet = raffle.chain === "robinhood" ? await robinhoodNetwork() : "unknown";
 
   return (
     <main className="mx-auto w-full max-w-2xl px-6 py-16">
@@ -138,14 +143,33 @@ export default async function RafflePage({ params }: PageProps<"/r/[slug]">) {
            * hostname is not proof of anything, and the browser cannot be
            * trusted to say which deployment it is.
            */
-          <BuyTickets
-            slug={raffle.slug}
-            proxyCluster={classifyEndpoints(solanaRpcUrls())}
-            isProduction={process.env.VERCEL_ENV === "production"}
-            ticketPriceDisplay={chain.formatNative(raffle.ticketPriceNative)}
-            nativeSymbol={chain.nativeSymbol}
-            ticketsRemaining={raffle.maxTickets - sold}
-          />
+          raffle.chain === "robinhood" ? (
+            /*
+             * Classified by ASKING the chain (`eth_chainId`), not by reading
+             * the endpoint's shape: EVM nodes state which chain they are, and a
+             * URL pattern is a guess about a provider's naming. Only the answer
+             * goes down.
+             */
+            <BuyTicketsRobinhood
+              slug={raffle.slug}
+              serverNetwork={robinhoodNet}
+              expectedChainId={chainIdFor(robinhoodNet)}
+              isProduction={process.env.VERCEL_ENV === "production"}
+              ticketPriceDisplay={chain.formatNative(raffle.ticketPriceNative)}
+              ticketPriceWei={raffle.ticketPriceNative.toString()}
+              nativeSymbol={chain.nativeSymbol}
+              ticketsRemaining={raffle.maxTickets - sold}
+            />
+          ) : (
+            <BuyTickets
+              slug={raffle.slug}
+              proxyCluster={classifyEndpoints(solanaRpcUrls())}
+              isProduction={process.env.VERCEL_ENV === "production"}
+              ticketPriceDisplay={chain.formatNative(raffle.ticketPriceNative)}
+              nativeSymbol={chain.nativeSymbol}
+              ticketsRemaining={raffle.maxTickets - sold}
+            />
+          )
         ) : (
           <p className="rounded border border-neutral-300 bg-neutral-50 p-4 text-neutral-700">
             {buyingClosed.message}
