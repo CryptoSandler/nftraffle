@@ -33,10 +33,15 @@ flagged rather than passed through:
 - **The faucet at `faucet.testnet.chain.robinhood.com`.** Widely reported by
   third parties; absent from the official deploy page I read. Confirm it before a
   plan depends on it, because the testnet strategy in §5 does.
-- **Block time.** Nitro chains are commonly ~250ms, but no official figure was
-  found, and §3.4 shows why guessing it is not acceptable here: the draw's
-  announcement margin is computed from it, and a wrong figure announces a block
-  that arrives before the raffle closes.
+- **Block time.** No official figure was found, and §3.4 shows why guessing it
+  is not acceptable: the draw's announcement margin is computed from it, and a
+  wrong figure announces a block that arrives before the raffle closes.
+  **Since resolved by measuring it** rather than taking a third party's number —
+  ≈0.101 s/block, ≈35,600 blocks/hour, stable to 1.01× across 5.8 days of
+  history. Method, figures and the safety direction are in
+  [`docs/decisions.md`](../../decisions.md) Q8. Note this is ~2.5× faster than
+  the ~250ms commonly quoted for Nitro chains, which is exactly why it was
+  measured.
 
 ---
 
@@ -354,9 +359,17 @@ the moment the surface opens moves — so this is a cheap disagreement to have.
 
 ---
 
-## 6. Product questions
+## 6. Product questions — ANSWERED 2026-08-31
 
-Applied recommendations, left as questions rather than blocking.
+**These were put to the owner and all six are decided.** The answers, with cost
+and trigger, are Q7–Q12 in [`docs/decisions.md`](../../decisions.md); that file
+is the live source and this section is kept as the record of what was asked.
+
+Two answers went against the recommendation below, and both are recorded there:
+fees are suffixed per chain including the basis-point ones (P1 overruled), and
+the chain is named in the collection route (P3 sharpened to `/c/[chain]/[slug]`).
+The block time in §3.4 has since been **measured** rather than assumed —
+≈0.101 s/block, and the safety direction is the opposite of Solana's.
 
 **P1 — Should the two `*_BPS` fees stay unsuffixed?** *Applied:* yes, shared;
 only amount-denominated fees get a chain suffix. A ratio has no currency, and two
