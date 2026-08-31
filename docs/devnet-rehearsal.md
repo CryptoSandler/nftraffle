@@ -108,9 +108,27 @@ once, by whatever route works that day, and top the five keypairs up from it wit
 `solana transfer`. Devnet SOL is not consumed by much — the whole rehearsal costs
 well under 0.1 SOL in fees.
 
-**Fund `seller` and `buyer` with ~1 SOL each, and `escrow` with ~0.1** — escrow
-only pays fees on the payout transfers. `payment` and `impostor` need nothing
-until the negatives, and `impostor` needs ~0.1 to pay a fee.
+### Fund ONE wallet, then distribute by transfer
+
+**The faucet seeds; `solana transfer` distributes.** Every faucet caps by count
+as well as amount — the public one allows roughly two airdrops per 8 hours — so
+asking it for four wallets fails halfway and leaves a confusing partial state.
+
+Ask the faucet for **1 SOL each into `seller` and `buyer`**, then split from
+there. The first transfer into an empty address needs
+`--allow-unfunded-recipient`, which creates the account:
+
+```bash
+solana transfer --from seller.json "$ESCROW"   0.2 --allow-unfunded-recipient --fee-payer seller.json
+solana transfer --from buyer.json  "$IMPOSTOR" 0.2 --allow-unfunded-recipient --fee-payer buyer.json
+```
+
+That leaves roughly 0.8 / 0.8 / 0.2 / 0.2, which is ample: the whole rehearsal
+costs well under 0.1 SOL in fees. `payment` needs nothing — it only receives.
+
+**Keep `seller` as the durable devnet wallet between rehearsals.** Top the others
+up from it rather than returning to a faucet; that is the difference between a
+rehearsal you can run today and one that waits 8 hours.
 
 **This is the step that blocks an unattended run.** Everything after it is
 scriptable; this one needs either a browser or a key.
