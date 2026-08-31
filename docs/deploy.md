@@ -77,9 +77,24 @@ suite could truncate it.
 
 ## 2. Vercel 🧑 then 🤖
 
+**🧑 THIS STEP IS PANEL-ONLY FOR A REASON THAT IS NOT ABOUT VERCEL'S UI.** The
+Vercel CLI on this machine authenticates as `federicopanno`, whose only team is
+`tenedor`. The `sandler` scope is invisible to it — `vercel project ls --scope
+team_ceVZFNa9CxI1UDKOXoBMx2Z1` (the team pixelwar lives in) answers *"The
+specified scope does not exist"*, and `GET /v2/teams` returns `tenedor` alone.
+That is a different account, not a missing permission, so nothing on the CLI
+side can create this project.
+
+**Creating it under `tenedor` instead would be the wrong answer**, not a
+shortcut: it would put a public-facing money surface in the wrong org and make
+the eventual move a migration.
+
 🧑 **Create the project** in scope `sandler`, named `nftraffle`, linked to
 `CryptoSandler/nftraffle`, production branch `main`. Framework auto-detects as
 Next.js; no build overrides.
+
+🧑 Then either log the CLI into that account (`vercel login`) or issue a token
+scoped to it, and everything below becomes 🤖.
 
 🧑 **Root Directory:** repository root. **No `vercel.json` is needed** — this
 project has no crons, unlike pixelwar.
@@ -139,6 +154,34 @@ own screen and charges nothing, which is exactly what a preview should do.
 charging a guess — a number in copy that nothing enforces is the defect
 DESIGN.md §8.2 exists to prevent. Zero is a *configured* value: it makes the fee
 free, it does not close the surface.
+
+### Preview's devnet wallets — disposable, and replaced at mainnet
+
+Preview exists to rehearse. It gets a **devnet RPC and throwaway devnet
+wallets**, so the buy panel can be exercised end to end without real money —
+`paymentSafety` admits devnet only when `VERCEL_ENV !== production`, and the
+page says so in a banner.
+
+| Variable (Preview only) | Value |
+|---|---|
+| `SOLANA_RPC_URL` | `https://api.devnet.solana.com` (public devnet serves DAS) |
+| `PAYMENT_WALLET_SOLANA` | `6eyg2zyaHX4FXGJLD1nsnmmjexH9vif2veyXt1MbNpYa` |
+| `ESCROW_WALLET_SOLANA` | `FbXES1esmvNemD7ia9VBxiwqqHc7aPjmAaiFZ9FTgRjT` |
+
+Generated with `solana-keygen` into
+`~/.config/solana/nftraffle-devnet/`. **They are devnet keypairs on a
+developer's machine and hold nothing.** Public addresses only appear here; the
+keys never leave that directory and never enter any deployment.
+
+**THESE ARE NEVER SET IN PRODUCTION, and they are replaced — not promoted — when
+mainnet arrives.** A devnet address is a perfectly valid mainnet address that
+nobody has the key to on mainnet, so a copied value would collect real SOL into
+a wallet that cannot spend it. Production's two wallets are new, exclusive, and
+generated separately; see `docs/first-raffle.md` A1–A2.
+
+Production stays with **no RPC and no wallets** until those exist. That is not a
+gap: every money surface closes itself with its own screen and charges nothing,
+which is exactly what a deployment that cannot yet take money should do.
 
 ### Robinhood Chain — leave every one unset
 

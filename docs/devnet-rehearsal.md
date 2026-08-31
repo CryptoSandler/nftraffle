@@ -31,9 +31,24 @@ npm i -g @metaplex-foundation/cli   # provides `mplx`, for the Core asset
 mplx --version
 ```
 
-You need a **Helius devnet key with DAS**. The public devnet endpoint does not
-serve `getAsset`, and this project has no RPC default, so without it every step
-below refuses rather than guesses.
+### The RPC — public devnet is enough
+
+**`https://api.devnet.solana.com` serves DAS.** An earlier draft of this runbook
+said it did not and demanded a Helius key; running it proved otherwise:
+
+```bash
+curl -s -X POST https://api.devnet.solana.com -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"getAssetsByOwner",
+       "params":{"ownerAddress":"11111111111111111111111111111112","page":1,"limit":1}}'
+```
+
+That returns indexed assets. The control that makes it conclusive: an
+unsupported method answers `-32601 Method not found`, while `getAsset` on a
+nonexistent id answers `-32000 Database Error: RecordNotFound` — a DAS backend
+replying, not a missing method.
+
+A Helius devnet key still works and will be faster and less rate-limited. It is
+not a prerequisite.
 
 ### Three keypairs
 
@@ -62,12 +77,33 @@ is exactly its role in production. Generate it anyway so the address is real.
 ```bash
 solana config set --url devnet
 for k in seller buyer escrow impostor; do
-  solana airdrop 2 "$(solana-keygen pubkey $k.json)" || \
-    echo "airdrop rate-limited — try https://faucet.solana.com"
+  solana airdrop 2 "$(solana-keygen pubkey $k.json)"
+  sleep 8
 done
 ```
 
-Devnet airdrops are rate-limited. If they fail, the web faucet works.
+**Expect this to fail, and plan for it.** The public faucet is aggressively
+rate-limited per IP and answers:
+
+```
+429 You've either reached your airdrop limit today or the airdrop faucet has run dry.
+```
+
+Retrying, smaller amounts and longer sleeps do not help once the daily limit is
+hit — verified. The alternatives, in order of how likely they are to work:
+
+| Route | Works headless? | Notes |
+|---|---|---|
+| `https://faucet.solana.com` | **no** | Browser, and it asks for a GitHub login. A person has to do this. |
+| A Helius/QuickNode devnet key | yes | Their RPC's `requestAirdrop` has its own limits. Needs an account. |
+| An existing funded devnet wallet | yes | `solana transfer` from one you already have. |
+
+**Fund `seller` and `buyer` with ~1 SOL each, and `escrow` with ~0.1** — escrow
+only pays fees on the payout transfers. `payment` and `impostor` need nothing
+until the negatives, and `impostor` needs ~0.1 to pay a fee.
+
+**This is the step that blocks an unattended run.** Everything after it is
+scriptable; this one needs either a browser or a key.
 
 ### Mint a Core asset for the seller to raffle
 
@@ -75,7 +111,11 @@ Metaplex Core, because DAS indexes it and it is the cheapest thing to create
 that `getAsset` will answer about.
 
 ```bash
-mplx config set rpc <YOUR_HELIUS_DEVNET_URL>
+npm i -g @metaplex-foundation/cli    # mplx 0.4.3 at time of writing
+
+# The config KEY is `rpcUrl`, not `rpc` — `mplx config set --help` lists exactly
+# rpcUrl|commitment|payer|keypair, and a wrong key fails unhelpfully.
+mplx config set rpcUrl https://api.devnet.solana.com
 mplx config set keypair ~/.config/solana/nftraffle-devnet/seller.json
 
 mplx core collection create --name "Rehearsal" --uri "https://example.com/c.json"
@@ -87,6 +127,14 @@ mplx core asset create \
   --collection <COLLECTION_ADDRESS>
 # note the ASSET address — this is PRIZE_ASSET below
 ```
+
+> **`--rpc` and `--keypair` are global flags on every `mplx` command**, so the
+> per-command form works too and is what to use when switching signer mid-flow
+> (the deposit-and-withdraw negative below needs exactly that):
+>
+> ```bash
+> mplx core asset transfer <ASSET> <OWNER> -k ./escrow.json -r https://api.devnet.solana.com
+> ```
 
 The `--uri` is never fetched by this project (metadata comes from DAS), so a
 placeholder URL is fine here and only here.
@@ -184,7 +232,7 @@ solana transfer --from seller.json "$PAYMENT" 0.01 \
 FEE_SIG=$(python3 -c "import json;print(json.load(open('/tmp/fee.json'))['signature'])")
 
 # The prize, from the seller, into escrow.
-mplx core asset transfer --asset "$PRIZE_ASSET" --recipient "$ESCROW"
+mplx core asset transfer "$PRIZE_ASSET" "$ESCROW"
 # note the signature it prints
 ESCROW_SIG=<that signature>
 ```
@@ -219,13 +267,11 @@ asset is gone.
 
 ```bash
 # On a SECOND draft with a SECOND asset:
-mplx core asset transfer --asset "$PRIZE_ASSET_2" --recipient "$ESCROW"
+mplx core asset transfer "$PRIZE_ASSET_2" "$ESCROW"
 ESCROW_SIG_2=<signature>
 
 # Withdraw it again before publishing.
-mplx config set keypair ./escrow.json
-mplx core asset transfer --asset "$PRIZE_ASSET_2" --recipient "$SELLER"
-mplx config set keypair ./seller.json
+mplx core asset transfer "$PRIZE_ASSET_2" "$SELLER" -k ./escrow.json
 
 curl -s -X POST $API/api/raffles/$SLUG_2/publish -H 'content-type: application/json' \
   -d "{\"escrowSignature\":\"$ESCROW_SIG_2\",\"listingFeeSignature\":\"$FEE_SIG_2\"}"
@@ -390,8 +436,7 @@ Compute the split: gross = tickets × price; house = gross × bps / 10000, round
 
 ```bash
 # Prize, out of escrow, to the winner.
-mplx config set keypair ./escrow.json
-mplx core asset transfer --asset "$PRIZE_ASSET" --recipient "<WINNER>"
+mplx core asset transfer "$PRIZE_ASSET" "<WINNER>" -k ./escrow.json
 PRIZE_SIG=<signature>
 
 # Proceeds, to the seller.
