@@ -1,4 +1,5 @@
 import { base58Decode } from "../base58";
+import type { ChainId } from "../chain/adapter";
 
 /**
  * Payment configuration: the wallets, the RPC, and the four fees.
@@ -11,6 +12,31 @@ import { base58Decode } from "../base58";
  * `payments/sol-transfer.ts` (skew), every route that quotes a price, and every
  * screen that has to decide whether its surface is open at all.
  */
+
+/**
+ * The environment-variable suffix for each chain.
+ *
+ * A map rather than `chain.toUpperCase()`, so the variable names stay a
+ * deliberate list rather than a function of an identifier somebody might
+ * rename. `SOLANA` and `ROBINHOOD` are what `.env.example` documents.
+ */
+const ENV_SUFFIX: Record<ChainId, string> = {
+  solana: "SOLANA",
+  robinhood: "ROBINHOOD",
+};
+
+/**
+ * Decimal places in each chain's native unit.
+ *
+ * Duplicated from the per-chain constants on purpose: this module must not
+ * import `chain/solana/*` or `chain/robinhood/*`, because those import the
+ * adapter which imports this file. Two small numbers restated is a better trade
+ * than an import cycle, and both are covered by the fee tests.
+ */
+const NATIVE_DECIMALS: Record<ChainId, number> = {
+  solana: 9,
+  robinhood: 18,
+};
 
 // --- Addresses ---------------------------------------------------------------
 
@@ -55,9 +81,15 @@ function readWallet(name: string): WalletResult {
   return { ok: true, address: raw };
 }
 
-/** Receives ticket payments, listing fees and launch fees. */
-export function paymentWallet(): WalletResult {
-  return readWallet("PAYMENT_WALLET");
+/**
+ * Receives ticket payments, listing fees and launch fees, on one chain.
+ *
+ * **Suffixed per chain** (docs/decisions.md Q9), and the two wallets must be
+ * different addresses on different chains — an EVM address is not a Solana
+ * address and neither can receive the other's funds.
+ */
+export function paymentWallet(chain: ChainId): WalletResult {
+  return readWallet(`PAYMENT_WALLET_${ENV_SUFFIX[chain]}`);
 }
 
 /**
@@ -68,8 +100,8 @@ export function paymentWallet(): WalletResult {
  * by any code path here — every transfer out of it is performed by a human, and
  * this codebase's only job is to verify that it happened.
  */
-export function escrowWallet(): WalletResult {
-  return readWallet("ESCROW_WALLET");
+export function escrowWallet(chain: ChainId): WalletResult {
+  return readWallet(`ESCROW_WALLET_${ENV_SUFFIX[chain]}`);
 }
 
 // --- RPC ---------------------------------------------------------------------
@@ -84,56 +116,58 @@ export function escrowWallet(): WalletResult {
  * rather than like missing configuration. An empty list closes the on-chain
  * surfaces, which is the honest outcome.
  */
-export function solanaRpcUrls(): string[] {
+function rpcUrls(name: string): string[] {
   return (
-    process.env.SOLANA_RPC_URL?.split(",")
+    process.env[name]?.split(",")
       .map((url) => url.trim())
       .filter(Boolean) ?? []
   );
 }
 
-export function rpcConfigured(): boolean {
-  return solanaRpcUrls().length > 0;
+export function solanaRpcUrls(): string[] {
+  return rpcUrls("SOLANA_RPC_URL");
 }
 
-/** Confirmations required before a transfer counts as settled. */
-export const RPC_COMMITMENT = "confirmed";
-/** Attempts per verification, across all configured endpoints. */
-export const RPC_MAX_ATTEMPTS = 3;
-/** First backoff step; doubles each retry, capped by RPC_BACKOFF_MAX_MS. */
-export const RPC_BACKOFF_MS = 300;
-/** Ceiling on a single backoff step, so a retry cannot hold a request open. */
-export const RPC_BACKOFF_MAX_MS = 1_200;
-
 /**
- * Tolerance when comparing a transaction's on-chain blockTime against a
- * window this server computed. Our clock and the cluster's are not the same
- * clock; two minutes is generous for skew without meaningfully widening the
- * window a payment can land in.
- */
-export const BLOCKTIME_SKEW_SECONDS = 120;
-
-// --- Lamports ----------------------------------------------------------------
-
-/** Lamports in one SOL. Not a setting. */
-export const LAMPORTS_PER_SOL = 1_000_000_000n;
-
-/**
- * Renders lamports as a SOL amount somebody can read.
+ * Robinhood Chain endpoints.
  *
- * Trailing zeros trimmed, but never below two decimals, so the number on screen
- * looks like a price rather than like a float. The exact value is kept: this
- * quotes what a wallet is about to be asked for, and a rounded quote next to an
- * unrounded wallet dialog is the kind of small disagreement that makes a payer
- * close the tab.
+ * **Testnet only for now** (docs/decisions.md, the approved sequence): the
+ * adapter is built and its surface stays closed until one real raffle has run
+ * end to end on Solana. Nothing enforces testnet here — the variable takes
+ * whatever it is given — because `surfaceState` is what keeps the surface shut,
+ * and putting a second gate in the config would mean two places to open.
  */
-export function formatSol(lamports: bigint): string {
-  const negative = lamports < 0n;
-  const value = negative ? -lamports : lamports;
-  const whole = value / LAMPORTS_PER_SOL;
-  const fraction = (value % LAMPORTS_PER_SOL).toString().padStart(9, "0").replace(/0+$/, "");
-  const decimals = fraction.length < 2 ? fraction.padEnd(2, "0") : fraction;
-  return `${negative ? "-" : ""}${whole}.${decimals}`;
+export function evmRpcUrls(): string[] {
+  return rpcUrls("ROBINHOOD_RPC_URL");
+}
+
+export function rpcConfigured(chain: ChainId): boolean {
+  return (chain === "solana" ? solanaRpcUrls() : evmRpcUrls()).length > 0;
+}
+
+
+// --- Native amounts ----------------------------------------------------------
+
+/**
+ * Renders an amount in a chain's native unit.
+ *
+ * **Takes `decimals` rather than assuming nine.** The Solana-only version of
+ * this hardcoded lamports, and an EVM amount rendered through it would be off
+ * by a billion — in the direction where the number still looks plausible.
+ *
+ * Trailing zeros trimmed, but never below two decimals, so the number reads as
+ * a price rather than a float. The exact value is kept: this quotes what a
+ * wallet is about to be asked for, and a rounded quote beside an unrounded
+ * wallet dialog is what makes a payer close the tab.
+ */
+export function formatNative(amount: bigint, decimals: number): string {
+  const negative = amount < 0n;
+  const value = negative ? -amount : amount;
+  const unit = 10n ** BigInt(decimals);
+  const whole = value / unit;
+  const fraction = (value % unit).toString().padStart(decimals, "0").replace(/0+$/, "");
+  const shown = fraction.length < 2 ? fraction.padEnd(2, "0") : fraction;
+  return `${negative ? "-" : ""}${whole}.${shown}`;
 }
 
 // --- The four fees -----------------------------------------------------------
@@ -150,7 +184,7 @@ export function formatSol(lamports: bigint): string {
  * A missing fee therefore closes its surface rather than charging a guess.
  * `null` is the honest answer and every caller has to handle it.
  */
-export type FeeResult = { ok: true; lamports: bigint } | { ok: false; reason: string };
+export type FeeResult = { ok: true; amount: bigint } | { ok: false; reason: string };
 
 /**
  * A SOL-denominated fee from the environment, in lamports.
@@ -162,27 +196,43 @@ export type FeeResult = { ok: true; lamports: bigint } | { ok: false; reason: st
  * into each other, which is why this reads `undefined` separately rather than
  * coercing through `??`.
  */
-function solFee(name: string): FeeResult {
+function nativeFee(name: string, decimals: number): FeeResult {
   const raw = process.env[name]?.trim();
   if (raw === undefined || raw === "") {
     return { ok: false, reason: `This deployment has no ${name} configured.` };
   }
-  const sol = Number(raw);
-  if (!Number.isFinite(sol) || sol < 0) {
-    return { ok: false, reason: `${name} is not a non-negative number.` };
+  if (!/^\d+(\.\d+)?$/.test(raw)) {
+    return { ok: false, reason: `${name} is not a non-negative decimal number.` };
   }
-  // Rounded to whole lamports, which is what the chain moves.
-  return { ok: true, lamports: BigInt(Math.round(sol * Number(LAMPORTS_PER_SOL))) };
+
+  /**
+   * Parsed as a DECIMAL STRING, never through `Number`.
+   *
+   * ETH has 18 decimals and a double holds about 15-16 significant digits, so
+   * `Number("0.000000000000000001") * 1e18` does not reliably give 1. The
+   * Solana path survived `Number` because 9 decimals fits; the EVM path does
+   * not, and one shared parser that is correct for both is better than two
+   * where only one has been thought about.
+   */
+  const [whole, fraction = ""] = raw.split(".");
+  if (fraction.length > decimals) {
+    return { ok: false, reason: `${name} has more than ${decimals} decimal places.` };
+  }
+  const padded = fraction.padEnd(decimals, "0");
+  return { ok: true, amount: BigInt(whole + padded) };
 }
 
-/** Charged once, in SOL, to create a collection and its candy machine. */
-export function launchFee(): FeeResult {
-  return solFee("LAUNCH_FEE_SOL");
+/** Charged once, in the chain's native currency, to create a collection. */
+export function launchFee(chain: ChainId): FeeResult {
+  return nativeFee(`LAUNCH_FEE_${ENV_SUFFIX[chain]}`, NATIVE_DECIMALS[chain]);
 }
 
-/** Charged once, in SOL, to list a raffle. Antibot as much as revenue. */
-export function raffleListingFee(): FeeResult {
-  return solFee("RAFFLE_LISTING_FEE_SOL");
+/**
+ * Charged once, in the chain's native currency, to list a raffle. Antibot as
+ * much as revenue.
+ */
+export function raffleListingFee(chain: ChainId): FeeResult {
+  return nativeFee(`RAFFLE_LISTING_FEE_${ENV_SUFFIX[chain]}`, NATIVE_DECIMALS[chain]);
 }
 
 export type BpsResult = { ok: true; bps: number } | { ok: false; reason: string };
@@ -214,15 +264,22 @@ function bpsFee(name: string): BpsResult {
  * **fixed lamports at candy-machine creation time** and frozen for that
  * machine's life, so changing this value reaches collections launched
  * afterwards and not live ones. `collections.mint_fee_bps` and
- * `collections.mint_fee_lamports` record what each one actually charges.
+ * `collections.mint_fee_native` record what each one actually charges.
  */
-export function mintFeeBps(): BpsResult {
-  return bpsFee("MINT_FEE_BPS");
+export function mintFeeBps(chain: ChainId): BpsResult {
+  return bpsFee(`MINT_FEE_BPS_${ENV_SUFFIX[chain]}`);
 }
 
-/** The house's share of a raffle's ticket sales, in basis points. */
-export function houseFeeBps(): BpsResult {
-  return bpsFee("HOUSE_FEE_BPS");
+/**
+ * The house's share of a raffle's ticket sales, in basis points, per chain.
+ *
+ * **Suffixed even though a ratio has no currency** (docs/decisions.md Q9). The
+ * analysis recommended sharing one value; the owner's reasoning is better and
+ * is recorded there — gas, audience and price expectations differ per chain, so
+ * forcing one house fee across chains is a constraint nobody asked for.
+ */
+export function houseFeeBps(chain: ChainId): BpsResult {
+  return bpsFee(`HOUSE_FEE_BPS_${ENV_SUFFIX[chain]}`);
 }
 
 /**
@@ -234,8 +291,8 @@ export function houseFeeBps(): BpsResult {
  * rounding a fee up is the platform taking a lamport it did not earn, on every
  * raffle, forever.
  */
-export function feeLamports(grossLamports: bigint, bps: number): bigint {
-  return (grossLamports * BigInt(bps)) / 10_000n;
+export function feeAmount(gross: bigint, bps: number): bigint {
+  return (gross * BigInt(bps)) / 10_000n;
 }
 
 /**

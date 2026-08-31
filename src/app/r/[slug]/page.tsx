@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { formatSol } from "../../../lib/payments/config";
+import { adapterFor } from "../../../lib/chain/registry";
 import { advanceRaffle, raffleBySlug } from "../../../lib/raffles/lifecycle";
 import { payoutSplit } from "../../../lib/raffles/payout";
 import { ticketsSold } from "../../../lib/raffles/tickets";
@@ -25,11 +25,12 @@ export default async function RafflePage({ params }: PageProps<"/r/[slug]">) {
   const raffle = (await advanceRaffle(found.id)) ?? found;
   const sold = await ticketsSold(raffle.id);
   const split = payoutSplit({
-    ticketPriceLamports: raffle.ticketPriceLamports,
+    ticketPriceNative: raffle.ticketPriceNative,
     ticketsSold: sold,
     houseFeeBps: raffle.houseFeeBps,
   });
-  const buyingClosed = surfaceRefusal("buy_tickets", `GET /r/${slug}`);
+  const chain = adapterFor(raffle.chain);
+  const buyingClosed = surfaceRefusal("buy_tickets", raffle.chain, `GET /r/${slug}`);
 
   return (
     <main className="mx-auto w-full max-w-2xl px-6 py-16">
@@ -55,10 +56,12 @@ export default async function RafflePage({ params }: PageProps<"/r/[slug]">) {
 
       <dl className="mt-8 grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm">
         <dt className="text-neutral-500">Prize</dt>
-        <dd className="figure break-all">{raffle.prizeMint}</dd>
+        <dd className="figure break-all">{chain.parseAsset(raffle.prizeAsset)?.display ?? raffle.prizeAsset}</dd>
 
         <dt className="text-neutral-500">Ticket price</dt>
-        <dd className="figure">{formatSol(raffle.ticketPriceLamports)} SOL</dd>
+        <dd className="figure">
+          {chain.formatNative(raffle.ticketPriceNative)} {chain.nativeSymbol}
+        </dd>
 
         <dt className="text-neutral-500">Tickets</dt>
         {/* The ONLY odds figure any copy here may quote: a count of what sold,
@@ -137,8 +140,9 @@ export default async function RafflePage({ params }: PageProps<"/r/[slug]">) {
 
       {sold > 0 && (
         <p className="figure mt-8 text-xs text-neutral-500">
-          Sold to date {formatSol(split.grossLamports)} SOL · seller receives{" "}
-          {formatSol(split.sellerNetLamports)} SOL after a {raffle.houseFeeBps} bps platform fee
+          Sold to date {chain.formatNative(split.grossNative)} {chain.nativeSymbol} · seller receives{" "}
+          {chain.formatNative(split.sellerNetNative)} {chain.nativeSymbol} after a{" "}
+          {raffle.houseFeeBps} bps platform fee
         </p>
       )}
     </main>

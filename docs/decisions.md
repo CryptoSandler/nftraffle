@@ -168,6 +168,13 @@ its six open questions are answered here.
 against testnet; **keep the Robinhood surface closed until one real raffle has
 run end to end on Solana.**
 
+**Built on 2026-08-31** (branch `chain-adapter-seam`): `ChainAdapter` in
+`src/lib/chain/adapter.ts`, the Solana adapter wrapping what already existed,
+the Robinhood adapter new, and migration 004 renaming every `*_lamports` column
+and adding `chain`. The one switch that opens the second chain is `OPEN_CHAINS`
+in `src/lib/surfaces.ts`, and a test asserts Robinhood stays shut even with
+every one of its variables set.
+
 *What that costs:* the second chain is finished and invisible for a while, which
 feels like waste. *What it buys:* a bug found in the shared core is found once,
 on the chain that has the audience, instead of being fixed twice or misattributed

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { ChainId } from "../chain/adapter";
 import { isUniqueViolation, queryOne, transaction, violatedConstraint } from "../db";
 
 /**
@@ -44,9 +45,12 @@ export type Raffle = {
   id: string;
   slug: string;
   sellerWallet: string;
-  prizeMint: string;
+  /** Which chain this raffle settles on. Frozen at creation. */
+  chain: ChainId;
+  /** Chain-scoped asset reference — a Solana mint, or `<contract>/<tokenId>`. */
+  prizeAsset: string;
   collectionId: string | null;
-  ticketPriceLamports: bigint;
+  ticketPriceNative: bigint;
   maxTickets: number;
   houseFeeBps: number;
   listingFeeSignature: string | null;
@@ -73,9 +77,10 @@ type RaffleRow = {
   id: string;
   slug: string;
   seller_wallet: string;
-  prize_mint: string;
+  chain: ChainId;
+  prize_asset: string;
   collection_id: string | null;
-  ticket_price_lamports: string;
+  ticket_price_native: string;
   max_tickets: number;
   house_fee_bps: number;
   listing_fee_signature: string | null;
@@ -97,7 +102,7 @@ type RaffleRow = {
   cancelled_reason: string | null;
 };
 
-const COLUMNS = `id, slug, seller_wallet, prize_mint, collection_id, ticket_price_lamports,
+const COLUMNS = `id, slug, chain, seller_wallet, prize_asset, collection_id, ticket_price_native,
   max_tickets, house_fee_bps, listing_fee_signature, escrow_signature, status, seed_hash, seed,
   draw_slot, draw_blockhash, winner_wallet, winning_ticket, opens_at, ends_at, created_at,
   drawn_at, prize_signature, proceeds_signature, paid_at, cancelled_reason`;
@@ -113,9 +118,10 @@ function toRaffle(row: RaffleRow): Raffle {
     id: row.id,
     slug: row.slug,
     sellerWallet: row.seller_wallet,
-    prizeMint: row.prize_mint,
+    chain: row.chain,
+    prizeAsset: row.prize_asset,
     collectionId: row.collection_id,
-    ticketPriceLamports: BigInt(row.ticket_price_lamports),
+    ticketPriceNative: BigInt(row.ticket_price_native),
     maxTickets: row.max_tickets,
     houseFeeBps: row.house_fee_bps,
     listingFeeSignature: row.listing_fee_signature,
@@ -153,9 +159,12 @@ export async function raffleBySlug(slug: string): Promise<Raffle | null> {
 export type CreateDraftInput = {
   slug: string;
   sellerWallet: string;
-  prizeMint: string;
+  /** Which chain this raffle settles on. Frozen at creation. */
+  chain: ChainId;
+  /** Chain-scoped asset reference — a Solana mint, or `<contract>/<tokenId>`. */
+  prizeAsset: string;
   collectionId: string | null;
-  ticketPriceLamports: bigint;
+  ticketPriceNative: bigint;
   maxTickets: number;
   /** Frozen per raffle: a later change to HOUSE_FEE_BPS must not reach back. */
   houseFeeBps: number;
@@ -198,17 +207,18 @@ export async function createDraft(input: CreateDraftInput): Promise<CreateDraftR
   try {
     const row = await queryOne<RaffleRow>(
       `INSERT INTO raffles
-         (id, slug, seller_wallet, prize_mint, collection_id, ticket_price_lamports,
+         (id, slug, chain, seller_wallet, prize_asset, collection_id, ticket_price_native,
           max_tickets, house_fee_bps, seed_hash, seed_secret, draw_slot, ends_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
        RETURNING ${COLUMNS}`,
       [
         id,
         input.slug,
+        input.chain,
         input.sellerWallet,
-        input.prizeMint,
+        input.prizeAsset,
         input.collectionId,
-        input.ticketPriceLamports.toString(),
+        input.ticketPriceNative.toString(),
         input.maxTickets,
         input.houseFeeBps,
         input.seedHash,

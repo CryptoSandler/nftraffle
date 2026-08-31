@@ -1,10 +1,8 @@
 import { requireAdmin } from "../../../../../../lib/admin-guard";
-import { fetchTransaction } from "../../../../../../lib/chain/rpc";
+import { adapterFor } from "../../../../../../lib/chain/registry";
 import { json, NO_STORE, refuseForeignOrigin } from "../../../../../../lib/http";
 import { escrowWallet, rpcConfigured } from "../../../../../../lib/payments/config";
-import { isSignatureShaped } from "../../../../../../lib/payments/signature";
-import { verifySolTransfer } from "../../../../../../lib/payments/sol-transfer";
-import { readAssetTransfer } from "../../../../../../lib/chain/asset-transfer";
+
 import { raffleById, recordPayout } from "../../../../../../lib/raffles/lifecycle";
 import { payoutSplit, verifyPayout } from "../../../../../../lib/raffles/payout";
 import { ticketsSold } from "../../../../../../lib/raffles/tickets";
@@ -38,12 +36,16 @@ export async function POST(
   const guard = await requireAdmin(request, `POST /api/admin/raffles/${id}/paid`);
   if (!guard.ok) return guard.response;
 
-  if (!rpcConfigured()) {
+  const raffle = await raffleById(id);
+  if (!raffle) return json({ error: "No such raffle." }, { status: 404, headers: NO_STORE });
+
+  const chain = adapterFor(raffle.chain);
+  if (!rpcConfigured(raffle.chain)) {
     console.error(`POST /api/admin/raffles/${id}/paid: SOLANA_RPC_URL is not set.`);
     return json({ error: "No Solana connection is configured." }, { status: 503, headers: NO_STORE });
   }
 
-  const escrow = escrowWallet();
+  const escrow = escrowWallet(raffle.chain);
   if (!escrow.ok) {
     console.error(`POST /api/admin/raffles/${id}/paid: ${escrow.reason}`);
     return json({ error: "No escrow wallet is configured." }, { status: 503, headers: NO_STORE });
@@ -53,12 +55,10 @@ export async function POST(
   const prizeSignature = String(form.get("prizeSignature") ?? "").trim();
   const proceedsSignature = String(form.get("proceedsSignature") ?? "").trim();
 
-  if (!isSignatureShaped(prizeSignature)) {
-    return json({ error: "The prize signature is not a Solana transaction signature." }, { status: 400, headers: NO_STORE });
+  if (!chain.isTxId(prizeSignature)) {
+    return json({ error: "The prize signature is not a transaction id on this raffle's chain." }, { status: 400, headers: NO_STORE });
   }
 
-  const raffle = await raffleById(id);
-  if (!raffle) return json({ error: "No such raffle." }, { status: 404, headers: NO_STORE });
   if (raffle.status !== "drawn") {
     return json(
       { error: `This raffle is ${raffle.status}, so it cannot be marked paid.` },
@@ -73,7 +73,7 @@ export async function POST(
   }
 
   const split = payoutSplit({
-    ticketPriceLamports: raffle.ticketPriceLamports,
+    ticketPriceNative: raffle.ticketPriceNative,
     ticketsSold: await ticketsSold(raffle.id),
     houseFeeBps: raffle.houseFeeBps,
   });
@@ -81,9 +81,9 @@ export async function POST(
   // The proceeds leg is only demanded when there is something to pay. A raffle
   // that sold nothing owes the seller nothing, and a zero net has only a prize
   // leg — returning the asset.
-  if (split.sellerNetLamports > 0n && !isSignatureShaped(proceedsSignature)) {
+  if (split.sellerNetNative > 0n && !chain.isTxId(proceedsSignature)) {
     return json(
-      { error: "The proceeds signature is not a Solana transaction signature." },
+      { error: "The proceeds signature is not a transaction id on this raffle's chain." },
       { status: 400, headers: NO_STORE },
     );
   }
@@ -91,18 +91,25 @@ export async function POST(
   const verdict = await verifyPayout({
     prizeSignature,
     proceedsSignature,
-    prizeMint: raffle.prizeMint,
+    prizeAsset: raffle.prizeAsset,
     escrowWallet: escrow.address,
     winnerWallet: raffle.winnerWallet,
     sellerWallet: raffle.sellerWallet,
-    sellerNetLamports: split.sellerNetLamports,
-    readPrizeTransfer: (signature) => readAssetTransfer(signature, raffle.prizeMint),
+    sellerNetNative: split.sellerNetNative,
+    sameAddress: chain.sameAddress,
+    readPrizeTransfer: async (signature) => {
+      const asset = chain.parseAsset(raffle.prizeAsset);
+      // Unreachable while the row was written by this application, and kept
+      // rather than asserted away: this value decides who is recorded as having
+      // received somebody else's NFT.
+      if (!asset) return { ok: false as const, reason: "no_transfer" as const };
+      return chain.readAssetTransfer(signature, asset);
+    },
     verifyProceeds: (input) =>
-      verifySolTransfer({
-        signature: input.signature,
+      chain.verifyNativeTransfer({
+        txId: input.signature,
         recipient: input.recipient,
-        minLamports: input.minLamports,
-        fetchTransaction,
+        minAmount: input.minAmount,
       }),
   });
 

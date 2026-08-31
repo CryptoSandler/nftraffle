@@ -71,9 +71,10 @@ export default async function VerifyPage({ params }: PageProps<"/r/[slug]/verify
         </h2>
         <p className="mt-3 text-neutral-700">
           When this raffle was created, the server generated a random 32-byte seed, published{" "}
-          <code className="figure">sha256(seed)</code>, and announced the Solana slot whose
-          blockhash the draw would use. That slot did not exist yet, so its blockhash could not be
-          known by anyone — including us.
+          <code className="figure">sha256(seed)</code>, and announced the{" "}
+          {raffle.chain === "solana" ? "Solana slot" : "Robinhood Chain block"} whose hash the draw
+          would use. That {raffle.chain === "solana" ? "slot" : "block"} did not exist yet, so its
+          hash could not be known by us.
         </p>
         <p className="mt-3 text-neutral-700">
           When the raffle closed, the seed was published and the announced slot&apos;s blockhash
@@ -100,7 +101,7 @@ winningTicket  = (material as a big-endian integer mod ticketCount) + 1`}
           <dt className="text-neutral-500">seedHash</dt>
           <dd className="figure break-all">{raffle.seedHash}</dd>
 
-          <dt className="text-neutral-500">announced slot</dt>
+          <dt className="text-neutral-500">announced height</dt>
           <dd className="figure">{raffle.drawSlot.toString()}</dd>
 
           <dt className="text-neutral-500">seed</dt>
@@ -161,12 +162,38 @@ winningTicket  = (material as a big-endian integer mod ticketCount) + 1`}
         <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
           What this does not prove
         </h2>
+        {/*
+          TWO TEXTS, ONE PER CHAIN, AND THE ROBINHOOD ONE IS NARROWER
+          (docs/decisions.md Q7).
+
+          On Solana a future slot's hash is unknowable to everyone. On an
+          Arbitrum Orbit chain the sequencer is a single operator, so a future
+          block hash is unknowable to US — which is what makes bias impossible —
+          but is not provably unknowable to the party ordering the blocks.
+
+          Reusing the Solana wording there would be a claim this product cannot
+          support, and DESIGN.md §8.4 forbids exactly that.
+        */}
         <p className="mt-3 text-neutral-700">
-          It proves the winner was not chosen after the fact: the commitment was published before
-          the announced slot existed, so no seed could have been picked to suit a result. It does
-          not prove the seed will be published at all — nothing here can force that. Payouts are
-          made by hand, and the raffle page shows the transaction signatures for both, which you
-          can look up yourself.
+          {raffle.chain === "solana" ? (
+            <>
+              It proves the winner was not chosen after the fact: the commitment was published
+              before the announced slot existed, so no seed could have been picked to suit a
+              result. It does not prove the seed will be published at all — nothing here can force
+              that.
+            </>
+          ) : (
+            <>
+              It proves <strong>we</strong> did not choose the winner after the fact: the
+              commitment was published before the announced block existed, so no seed could have
+              been picked to suit a result. It does not prove that <em>nobody</em> could have known
+              that block in advance — Robinhood Chain orders its blocks through a single sequencer,
+              and this raffle trusts that sequencer not to have influenced the hash. It also does
+              not prove the seed will be published at all; nothing here can force that.
+            </>
+          )}{" "}
+          Payouts are made by hand, and the raffle page shows the transaction ids for both, which
+          you can look up yourself.
         </p>
       </section>
 

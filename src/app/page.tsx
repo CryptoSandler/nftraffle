@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { formatSol } from "../lib/payments/config";
+import { adapterFor } from "../lib/chain/registry";
 import { liveRaffles, recentCollections } from "../lib/raffles/listing";
 import { surfaceState } from "../lib/surfaces";
 
@@ -21,8 +21,9 @@ export const dynamic = "force-dynamic";
  */
 export default async function Home() {
   const [raffles, collections] = await Promise.all([liveRaffles(), recentCollections()]);
-  const listing = surfaceState("list_raffle");
-  const launching = surfaceState("launch_collection");
+  // The home page links to the Solana surfaces; Robinhood is closed.
+  const listing = surfaceState("list_raffle", "solana");
+  const launching = surfaceState("launch_collection", "solana");
 
   return (
     <main className="mx-auto w-full max-w-3xl px-6 py-16">
@@ -56,7 +57,8 @@ export default async function Home() {
                   <div className="flex items-baseline justify-between gap-4">
                     <span className="font-medium">{raffle.slug}</span>
                     <span className="figure text-sm text-neutral-600">
-                      {formatSol(raffle.ticketPriceLamports)} SOL
+                      {adapterFor(raffle.chain).formatNative(raffle.ticketPriceNative)}{" "}
+                      {adapterFor(raffle.chain).nativeSymbol}
                     </span>
                   </div>
                   <p className="mt-1 text-sm text-neutral-600">
@@ -83,11 +85,12 @@ export default async function Home() {
           <ul className="divide-y divide-neutral-200 border-y border-neutral-200">
             {collections.map((collection) => (
               <li key={collection.id} className="py-4">
-                <Link className="block hover:bg-neutral-50" href={`/c/${collection.slug}`}>
+                <Link className="block hover:bg-neutral-50" href={`/c/${collection.chain}/${collection.slug}`}>
                   <div className="flex items-baseline justify-between gap-4">
                     <span className="font-medium">{collection.name}</span>
                     <span className="figure text-sm text-neutral-600">
-                      {formatSol(collection.priceLamports)} SOL
+                      {adapterFor(collection.chain).formatNative(collection.priceNative)}{" "}
+                      {adapterFor(collection.chain).nativeSymbol}
                     </span>
                   </div>
                   <p className="figure mt-1 text-sm text-neutral-600">

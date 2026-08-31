@@ -1,4 +1,5 @@
 import { query } from "../db";
+import type { ChainId } from "../chain/adapter";
 import type { RaffleStatus } from "./lifecycle";
 
 /**
@@ -19,10 +20,11 @@ import type { RaffleStatus } from "./lifecycle";
 export type RaffleSummary = {
   id: string;
   slug: string;
-  prizeMint: string;
+  chain: ChainId;
+  prizeAsset: string;
   sellerWallet: string;
   collectionId: string | null;
-  ticketPriceLamports: bigint;
+  ticketPriceNative: bigint;
   maxTickets: number;
   ticketsSold: number;
   /**
@@ -42,10 +44,11 @@ export type RaffleSummary = {
 type SummaryRow = {
   id: string;
   slug: string;
-  prize_mint: string;
+  chain: ChainId;
+  prize_asset: string;
   seller_wallet: string;
   collection_id: string | null;
-  ticket_price_lamports: string;
+  ticket_price_native: string;
   max_tickets: number;
   house_fee_bps: number;
   sold: string;
@@ -58,10 +61,11 @@ function toSummary(row: SummaryRow): RaffleSummary {
   return {
     id: row.id,
     slug: row.slug,
-    prizeMint: row.prize_mint,
+    chain: row.chain,
+    prizeAsset: row.prize_asset,
     sellerWallet: row.seller_wallet,
     collectionId: row.collection_id,
-    ticketPriceLamports: BigInt(row.ticket_price_lamports),
+    ticketPriceNative: BigInt(row.ticket_price_native),
     maxTickets: row.max_tickets,
     ticketsSold: Number(row.sold),
     houseFeeBps: row.house_fee_bps,
@@ -72,8 +76,8 @@ function toSummary(row: SummaryRow): RaffleSummary {
 }
 
 const SUMMARY_SELECT = `
-  SELECT r.id, r.slug, r.prize_mint, r.seller_wallet, r.collection_id,
-         r.ticket_price_lamports, r.max_tickets, r.house_fee_bps, r.status,
+  SELECT r.id, r.slug, r.chain, r.prize_asset, r.seller_wallet, r.collection_id,
+         r.ticket_price_native, r.max_tickets, r.house_fee_bps, r.status,
          r.winner_wallet, r.ends_at,
          (SELECT count(*) FROM tickets t WHERE t.raffle_id = r.id) AS sold
     FROM raffles r`;
@@ -137,14 +141,15 @@ export async function drawQueue(): Promise<RaffleSummary[]> {
 export type CollectionSummary = {
   id: string;
   slug: string;
+  chain: ChainId;
   name: string;
   symbol: string;
   collectionMint: string | null;
   candyMachine: string | null;
   creatorWallet: string;
   itemsAvailable: number;
-  priceLamports: bigint;
-  mintFeeLamports: bigint;
+  priceNative: bigint;
+  mintFeeNative: bigint;
   mintFeeBps: number;
   launchedAt: Date | null;
 };
@@ -152,14 +157,15 @@ export type CollectionSummary = {
 type CollectionRow = {
   id: string;
   slug: string;
+  chain: ChainId;
   name: string;
   symbol: string;
   collection_mint: string | null;
   candy_machine: string | null;
   creator_wallet: string;
   items_available: number;
-  price_lamports: string;
-  mint_fee_lamports: string;
+  price_native: string;
+  mint_fee_native: string;
   mint_fee_bps: number;
   launched_at: Date | null;
 };
@@ -168,21 +174,22 @@ function toCollection(row: CollectionRow): CollectionSummary {
   return {
     id: row.id,
     slug: row.slug,
+    chain: row.chain,
     name: row.name,
     symbol: row.symbol,
     collectionMint: row.collection_mint,
     candyMachine: row.candy_machine,
     creatorWallet: row.creator_wallet,
     itemsAvailable: row.items_available,
-    priceLamports: BigInt(row.price_lamports),
-    mintFeeLamports: BigInt(row.mint_fee_lamports),
+    priceNative: BigInt(row.price_native),
+    mintFeeNative: BigInt(row.mint_fee_native),
     mintFeeBps: row.mint_fee_bps,
     launchedAt: row.launched_at,
   };
 }
 
-const COLLECTION_COLUMNS = `id, slug, name, symbol, collection_mint, candy_machine,
-  creator_wallet, items_available, price_lamports, mint_fee_lamports, mint_fee_bps, launched_at`;
+const COLLECTION_COLUMNS = `id, slug, chain, name, symbol, collection_mint, candy_machine,
+  creator_wallet, items_available, price_native, mint_fee_native, mint_fee_bps, launched_at`;
 
 /**
  * Collections that actually exist on chain.
@@ -201,38 +208,53 @@ export async function recentCollections(limit = 24): Promise<CollectionSummary[]
   return rows.map(toCollection);
 }
 
-export async function collectionBySlug(slug: string): Promise<CollectionSummary | null> {
+export async function collectionBySlug(
+  chain: ChainId,
+  slug: string,
+): Promise<CollectionSummary | null> {
+  // Scoped by chain: a collection lives on exactly one (docs/decisions.md Q10),
+  // and two chains could legitimately produce the same slug.
   const rows = await query<CollectionRow>(
-    `SELECT ${COLLECTION_COLUMNS} FROM collections WHERE slug = $1`,
-    [slug],
+    `SELECT ${COLLECTION_COLUMNS} FROM collections WHERE chain = $1 AND slug = $2`,
+    [chain, slug],
   );
   return rows[0] ? toCollection(rows[0]) : null;
 }
 
 /**
- * Raffles whose prize belongs to a collection we did NOT launch.
+ * Raffles here whose prize belongs to a collection we did NOT launch.
  *
- * The owner's answer to open question Q5: every collection gets a page, not
- * only the ones launched here. A collection we launched has a row and its own
- * numbers; one we did not has no row at all, so its page is assembled from DAS
- * plus whatever raffles here happen to name it.
+ * The owner's answer to Q5 and Q10: every collection gets a page, scoped to one
+ * chain. A collection we launched has a row and its own numbers; one we did not
+ * has no row at all, so its page is assembled from the chain plus whatever
+ * raffles here happen to name assets in it.
  *
- * **`collection_mint` is not a column** — `raffles.collection_id` points at our
- * own `collections` table and is NULL for an outside asset. So the join is done
- * the only way it can be: by asking DAS which collection each prize belongs to.
- * That is a network call per prize, which is why this is bounded and why the
- * caller caches nothing it did not read this request.
+ * **Matched by the asset reference's prefix**, because `raffles.collection_id`
+ * points at our own table and is NULL for an outside asset. On EVM every asset
+ * in a collection shares the contract address, so `prize_asset LIKE
+ * '<contract>/%'` is exact. On Solana a mint carries no collection in its own
+ * address, so this returns nothing there and the page falls back to what the
+ * chain reports — stated rather than silently empty.
  *
- * WHO CALLS THIS: `/c/[mint]` — the outside-collection page.
+ * `LIKE` with an escaped prefix, never interpolation: the slug comes from a URL.
+ *
+ * WHO CALLS THIS: `/c/[chain]/[slug]`, the outside-collection page.
  */
-export async function rafflesByPrizeMints(mints: readonly string[]): Promise<RaffleSummary[]> {
-  if (mints.length === 0) return [];
+export async function rafflesForOutsideCollection(
+  chain: ChainId,
+  collectionAddress: string,
+): Promise<RaffleSummary[]> {
+  // `_` and `%` are LIKE wildcards and an address contains neither, but
+  // escaping is not conditional on today's alphabet.
+  const prefix = `${collectionAddress.toLowerCase().replace(/[\\%_]/g, "\\$&")}/%`;
   const rows = await query<SummaryRow>(
     `${SUMMARY_SELECT}
-      WHERE r.prize_mint = ANY($1::text[]) AND r.status <> 'draft'
+      WHERE r.chain = $1
+        AND r.status <> 'draft'
+        AND lower(r.prize_asset) LIKE $2 ESCAPE '\\'
       ORDER BY (r.status = 'open') DESC, r.ends_at DESC
       LIMIT 200`,
-    [mints.slice(0, 500)],
+    [chain, prefix],
   );
   return rows.map(toSummary);
 }

@@ -1,8 +1,7 @@
 import { identify, json, NO_STORE, refuseForeignOrigin } from "../../../../../lib/http";
-import { fetchTransaction } from "../../../../../lib/chain/rpc";
+import { adapterFor } from "../../../../../lib/chain/registry";
 import { paymentWallet } from "../../../../../lib/payments/config";
-import { isSignatureShaped } from "../../../../../lib/payments/signature";
-import { verifySolTransfer } from "../../../../../lib/payments/sol-transfer";
+
 import { orderById, settleTicketOrder } from "../../../../../lib/raffles/tickets";
 import { checkVerificationLimits, recordVerificationAttempt } from "../../../../../lib/rate-limit";
 import { surfaceRefusal } from "../../../../../lib/surfaces";
@@ -29,10 +28,14 @@ export async function POST(
 
   const { id } = await context.params;
 
-  const closed = surfaceRefusal("buy_tickets", `POST /api/orders/${id}/confirm`);
+  const order = await orderById(id);
+  if (!order) return json({ error: "No such order." }, { status: 404, headers: NO_STORE });
+
+  const chain = adapterFor(order.chain);
+  const closed = surfaceRefusal("buy_tickets", order.chain, `POST /api/orders/${id}/confirm`);
   if (closed) return json({ error: closed.message }, { status: 503, headers: NO_STORE });
 
-  const wallet = paymentWallet();
+  const wallet = paymentWallet(order.chain);
   if (!wallet.ok) {
     console.error(`POST /api/orders/${id}/confirm: ${wallet.reason}`);
     return json({ error: "Payments are not available right now." }, { status: 503, headers: NO_STORE });
@@ -46,18 +49,15 @@ export async function POST(
   }
 
   const { signature } = (body ?? {}) as Record<string, unknown>;
-  if (typeof signature !== "string" || !isSignatureShaped(signature)) {
+  if (typeof signature !== "string" || !chain.isTxId(signature)) {
     return json(
-      { error: "That does not look like a Solana transaction signature." },
+      { error: "That does not look like a transaction id on this order's chain." },
       { status: 400, headers: NO_STORE },
     );
   }
 
   const caller = identify(request);
   if (!caller.ok) return json({ error: caller.message }, { status: 400, headers: NO_STORE });
-
-  const order = await orderById(id);
-  if (!order) return json({ error: "No such order." }, { status: 404, headers: NO_STORE });
 
   const limit = await checkVerificationLimits(order.id, caller.ipHash);
   if (limit.limited) {
@@ -77,13 +77,12 @@ export async function POST(
     signature: signature.trim(),
     paymentWallet: wallet.address,
     verify: (input) =>
-      verifySolTransfer({
-        signature: input.signature,
+      chain.verifyNativeTransfer({
+        txId: input.signature,
         recipient: input.recipient,
-        minLamports: input.minLamports,
+        minAmount: input.minAmount,
         expectedPayer: input.expectedPayer,
         window: input.window,
-        fetchTransaction,
       }),
   });
 

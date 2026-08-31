@@ -1,73 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
-import { announceDrawSlot, checkSellerChoices, DRAW_MARGIN_MS, SELLER_LIMITS, SLOT_MS } from "../schedule";
+import { checkSellerChoices, SELLER_LIMITS } from "../schedule";
+
+/**
+ * The seller's ceilings. Chain-neutral by design.
+ *
+ * The announced-height arithmetic that used to be tested here now lives with
+ * each chain's adapter — `chain/solana/index.ts` and
+ * `chain/robinhood/schedule.ts` — because the two chains disagree about which
+ * direction the estimate may err in. See `chain/robinhood/__tests__/schedule.test.ts`.
+ */
 
 const NOW = Date.parse("2026-08-28T12:00:00Z");
 
-describe("announceDrawSlot", () => {
-  it("names a slot that does not exist yet", () => {
-    // The one property the whole commitment scheme rests on. If the announced
-    // slot already existed, its blockhash would be knowable when the
-    // commitment was published.
-    const slot = announceDrawSlot({
-      currentSlot: 300_000_000n,
-      nowMs: NOW,
-      endsAtMs: NOW + 3_600_000,
-    });
-    expect(slot).toBeGreaterThan(300_000_000n);
-  });
-
-  it("sits past the close by the documented margin", () => {
-    const currentSlot = 300_000_000n;
-    const endsAtMs = NOW + 3_600_000;
-    const slot = announceDrawSlot({ currentSlot, nowMs: NOW, endsAtMs });
-
-    const slotsToClose = BigInt(Math.ceil((endsAtMs - NOW) / SLOT_MS));
-    const marginSlots = BigInt(Math.ceil(DRAW_MARGIN_MS / SLOT_MS));
-    expect(slot).toBe(currentSlot + slotsToClose + marginSlots);
-  });
-
-  it("still names a future slot when the close is already in the past", () => {
-    // Not reachable through the create route, which validates duration first,
-    // and guarded anyway: announcing a slot that already exists would publish a
-    // commitment whose randomness is already knowable.
-    const slot = announceDrawSlot({
-      currentSlot: 300_000_000n,
-      nowMs: NOW,
-      endsAtMs: NOW - 10 * 3_600_000,
-    });
-    expect(slot).toBeGreaterThan(300_000_000n);
-  });
-
-  it("scales with the raffle's length", () => {
-    const short = announceDrawSlot({ currentSlot: 1n, nowMs: NOW, endsAtMs: NOW + 3_600_000 });
-    const long = announceDrawSlot({ currentSlot: 1n, nowMs: NOW, endsAtMs: NOW + 30 * 86_400_000 });
-    expect(long).toBeGreaterThan(short);
-  });
-});
-
-describe("the margin keeps its reason in the same file", () => {
-  it("still explains why it is an hour, and which direction is the safe one", () => {
-    /**
-     * A test in another file can hold a number; it cannot stop somebody
-     * deleting the sentence that says why, and once the why is gone the number
-     * is arbitrary and the next person "optimises" it (CLAUDE.md).
-     *
-     * Matched on collapsed whitespace with comment markers stripped: these
-     * sentences are hard-wrapped, and asserting the raw file would assert where
-     * somebody's editor broke the line.
-     */
-    const source = readFileSync(new URL("../schedule.ts", import.meta.url), "utf8");
-    const prose = source.replace(/^\s*\*\s?/gm, " ").replace(/\s+/g, " ");
-
-    expect(prose).toContain("This margin is the whole safety property of the announcement.");
-    expect(prose).toContain("skipped slots make the chain's slot number advance more slowly");
-    expect(prose).toContain("the announced slot arrives LATER than an hour, never earlier");
-  });
-});
-
 describe("checkSellerChoices", () => {
-  const base = { ticketPriceLamports: 100_000_000n, maxTickets: 100, durationMinutes: 1_440, nowMs: NOW };
+  const base = { ticketPriceNative: 100_000_000n, maxTickets: 100, durationMinutes: 1_440, nowMs: NOW };
 
   it("accepts an ordinary raffle and returns its close time", () => {
     const result = checkSellerChoices(base);
@@ -75,7 +21,7 @@ describe("checkSellerChoices", () => {
   });
 
   it("refuses a free ticket", () => {
-    expect(checkSellerChoices({ ...base, ticketPriceLamports: 0n })).toMatchObject({
+    expect(checkSellerChoices({ ...base, ticketPriceNative: 0n })).toMatchObject({
       ok: false,
       reason: "price_too_low",
     });
@@ -85,7 +31,7 @@ describe("checkSellerChoices", () => {
     expect(
       checkSellerChoices({
         ...base,
-        ticketPriceLamports: SELLER_LIMITS.maxTicketPriceLamports + 1n,
+        ticketPriceNative: SELLER_LIMITS.maxTicketPriceNative + 1n,
       }),
     ).toMatchObject({ ok: false, reason: "price_too_high" });
   });

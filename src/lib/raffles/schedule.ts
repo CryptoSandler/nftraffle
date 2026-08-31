@@ -1,63 +1,18 @@
 /**
- * The seller's choices, and the slot the draw commits to.
+ * What a seller may choose.
  *
- * Two things live here and they are related: what a seller may choose, and the
- * future slot announced at creation. The second depends on the first, because
- * the slot has to be comfortably beyond whatever close time the seller picked.
+ * **The announced-height arithmetic used to live here and does not any more.**
+ * It moved onto the chain adapters when the second chain arrived, because the
+ * two chains disagree about the one thing that matters — which direction the
+ * estimate is allowed to be wrong in. Solana can only lag; an EVM chain running
+ * faster than measured would surface the announced hash while tickets are still
+ * selling. Each adapter carries its own measurement and its own margin.
+ *
+ * What stayed is chain-neutral: these are product limits on a seller's
+ * choices, and they are the same on every chain.
  *
  * WHO CALLS THIS: `POST /api/raffles`, and nothing else.
  */
-
-/**
- * Solana's target slot time. Not a setting — it is the protocol's own target,
- * and using a configured value here would let a typo announce a slot that
- * arrives days early or never.
- */
-export const SLOT_MS = 400;
-
-/**
- * How far past `ends_at` the announced slot sits.
- *
- * **This margin is the whole safety property of the announcement.** The slot
- * must not exist yet when the commitment is published, and it must still be
- * reachable soon after the raffle closes. Both ends are real:
- *
- * - TOO CLOSE and the network's real pace — which runs slower than the 400ms
- *   target whenever there are skipped slots, and there are always skipped
- *   slots — puts the announced slot before the close. A slot whose blockhash
- *   exists while tickets are still selling is a slot somebody can watch, and
- *   with the seed hash published they could not compute the winner from it, but
- *   it removes the one property the announcement is for.
- * - TOO FAR and every draw waits hours after its raffle closed, with the prize
- *   sitting in escrow and the winner not knowing.
- *
- * An hour is roughly 9,000 slots at target pace and comfortably more real time
- * than that in practice, since skipped slots make the chain's slot number
- * advance more slowly than the wall clock would suggest. That direction is the
- * safe one: it means the announced slot arrives LATER than an hour, never
- * earlier.
- */
-export const DRAW_MARGIN_MS = 60 * 60 * 1000;
-
-/**
- * The slot to announce for a raffle closing at `endsAt`.
- *
- * Rounded up so a fractional slot never lands on the current one, and returned
- * as `bigint` because slot numbers pass 2^53 in less than a human lifetime and
- * `raffles.draw_slot` is a `BIGINT`.
- */
-export function announceDrawSlot(input: {
-  currentSlot: bigint;
-  nowMs: number;
-  endsAtMs: number;
-}): bigint {
-  const aheadMs = input.endsAtMs - input.nowMs + DRAW_MARGIN_MS;
-  const slotsAhead = BigInt(Math.ceil(aheadMs / SLOT_MS));
-  // A raffle that somehow closes in the past still gets a slot in the future:
-  // announcing one that already exists would publish a commitment whose
-  // randomness is already knowable.
-  return input.currentSlot + (slotsAhead > 0n ? slotsAhead : 1n);
-}
 
 /**
  * Ceilings on what a seller may choose.
@@ -74,7 +29,17 @@ export function announceDrawSlot(input: {
  * defeats the only thing that page is for.
  */
 export const SELLER_LIMITS = {
-  maxTicketPriceLamports: 10_000_000_000n,
+  /**
+   * Ten SOL, expressed in that chain's smallest unit by the caller.
+   *
+   * **A per-chain ceiling would be better and is deliberately not built yet**:
+   * ten SOL and ten ETH are wildly different sums, so this bound is meaningful
+   * on Solana and nearly meaningless on an EVM chain. The Robinhood surface is
+   * closed, so nothing can hit it yet.
+   * // ponytail: single ceiling; make it per-chain before the Robinhood surface
+   * // opens, not after.
+   */
+  maxTicketPriceNative: 10_000_000_000n,
   maxTickets: 10_000,
   minDurationMinutes: 15,
   maxDurationDays: 30,
@@ -94,15 +59,15 @@ export type ChoiceResult =
 
 /** Validates the seller's three numbers, and returns the close time they imply. */
 export function checkSellerChoices(input: {
-  ticketPriceLamports: bigint;
+  ticketPriceNative: bigint;
   maxTickets: number;
   durationMinutes: number;
   nowMs: number;
 }): ChoiceResult {
-  if (input.ticketPriceLamports <= 0n) {
+  if (input.ticketPriceNative <= 0n) {
     return { ok: false, reason: "price_too_low", message: "A ticket has to cost something." };
   }
-  if (input.ticketPriceLamports > SELLER_LIMITS.maxTicketPriceLamports) {
+  if (input.ticketPriceNative > SELLER_LIMITS.maxTicketPriceNative) {
     return {
       ok: false,
       reason: "price_too_high",

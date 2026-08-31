@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { formatSol, launchFee, mintFeeBps } from "../../lib/payments/config";
+import { adapterFor } from "../../lib/chain/registry";
+import { launchFee, mintFeeBps } from "../../lib/payments/config";
 import { surfaceRefusal } from "../../lib/surfaces";
 
 export const dynamic = "force-dynamic";
@@ -22,9 +23,11 @@ export default function LaunchPage() {
   // beside the route name, which is the only place an operator can find out
   // WHICH variable is missing. A page that closes silently leaves them with a
   // blank screen and nothing to diagnose.
-  const closed = surfaceRefusal("launch_collection", "GET /launch");
-  const fee = launchFee();
-  const share = mintFeeBps();
+  // Solana only while the Robinhood surface is closed (docs/decisions.md).
+  const chain = adapterFor("solana");
+  const closed = surfaceRefusal("launch_collection", "solana", "GET /launch");
+  const fee = launchFee("solana");
+  const share = mintFeeBps("solana");
 
   return (
     <main className="mx-auto w-full max-w-2xl px-6 py-16">
@@ -45,7 +48,7 @@ export default function LaunchPage() {
           </p>
           <dl className="mt-8 grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm">
             <dt className="text-neutral-500">Launch fee</dt>
-            <dd className="figure">{fee.ok ? `${formatSol(fee.lamports)} SOL` : "—"}</dd>
+            <dd className="figure">{fee.ok ? `${chain.formatNative(fee.amount)} ${chain.nativeSymbol}` : "—"}</dd>
             <dt className="text-neutral-500">Platform share of each mint</dt>
             <dd className="figure">{share.ok ? `${share.bps} bps` : "—"}</dd>
           </dl>

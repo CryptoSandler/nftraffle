@@ -1,5 +1,5 @@
-import type { EscrowTransfer } from "../raffles/escrow";
-import { RPC_COMMITMENT } from "../payments/config";
+import type { EscrowTransfer } from "../../raffles/escrow";
+import { RPC_COMMITMENT } from "./constants";
 import { primaryEndpoint, rpcCall } from "./rpc";
 
 /**
@@ -71,7 +71,7 @@ type ParsedTransaction = {
  */
 export function readAssetTransferFrom(
   transaction: ParsedTransaction,
-  mint: string,
+  asset: string,
 ): EscrowTransfer {
   if (!transaction) return { ok: false, reason: "not_found" };
 
@@ -100,11 +100,11 @@ export function readAssetTransferFrom(
     // The caller always knows which mint it cares about. Returning whatever
     // asset happened to move would let a transaction carrying two transfers
     // satisfy a check about either one.
-    if (accounts[ASSET_INDEX] !== mint) continue;
+    if (accounts[ASSET_INDEX] !== asset) continue;
 
     return {
       ok: true,
-      mint,
+      asset,
       from: accounts[AUTHORITY_INDEX],
       to: accounts[NEW_OWNER_INDEX],
       blockTimeMs: transaction.blockTime * 1000,
@@ -117,7 +117,7 @@ export function readAssetTransferFrom(
 /** Fetches the transaction and reads the movement out of it. */
 export async function readAssetTransfer(
   signature: string,
-  mint: string,
+  asset: string,
 ): Promise<EscrowTransfer> {
   let parsed: unknown;
   try {
@@ -140,5 +140,5 @@ export async function readAssetTransfer(
     return { ok: false, reason: "rpc_unavailable" };
   }
 
-  return readAssetTransferFrom(parsed as ParsedTransaction, mint);
+  return readAssetTransferFrom(parsed as ParsedTransaction, asset);
 }

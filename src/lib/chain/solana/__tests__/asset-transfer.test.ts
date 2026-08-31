@@ -51,7 +51,7 @@ describe("readAssetTransferFrom", () => {
   it("reads a Core TransferV1", () => {
     expect(readAssetTransferFrom(coreTransfer(), ASSET)).toEqual({
       ok: true,
-      mint: ASSET,
+      asset: ASSET,
       from: OWNER,
       to: NEW_OWNER,
       blockTimeMs: 1_800_000_000_000,

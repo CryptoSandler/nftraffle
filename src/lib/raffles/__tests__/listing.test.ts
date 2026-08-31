@@ -27,10 +27,11 @@ async function raffle(overrides: Partial<Parameters<typeof createDraft>[0]> = {}
   counter += 1;
   const created = await createDraft({
     slug: `listing-${counter}`,
+    chain: "solana" as const,
     sellerWallet: SELLER,
-    prizeMint: `listmint-${counter}`,
+    prizeAsset: `listmint-${counter}`,
     collectionId: null,
-    ticketPriceLamports: 100_000_000n,
+    ticketPriceNative: 100_000_000n,
     maxTickets: 10,
     houseFeeBps: 500,
     drawSlot: 500_000_000n + BigInt(counter),
@@ -46,9 +47,9 @@ async function sell(raffleId: string, count: number) {
   const orderId = `lo-${raffleId}`;
   await query(
     `INSERT INTO ticket_orders
-       (id, raffle_id, quantity, amount_lamports, payer_pubkey, reference_pubkey, status,
+       (id, raffle_id, chain, quantity, amount_native, payer_pubkey, reference_pubkey, status,
         expires_at, paid_at)
-     VALUES ($1,$2,$3,$4,$5,$6,'paid', now() + interval '1 hour', now())`,
+     VALUES ($1,$2,'solana',$3,$4,$5,$6,'paid', now() + interval '1 hour', now())`,
     [orderId, raffleId, count, 100_000_000n * BigInt(count), BUYER, `lr-${orderId}`],
   );
   for (let n = 1; n <= count; n++) {
@@ -122,13 +123,13 @@ describe("the payout queue carries what an operator has to send", () => {
     expect(queued.houseFeeBps).toBe(500);
 
     const split = payoutSplit({
-      ticketPriceLamports: queued.ticketPriceLamports,
+      ticketPriceNative: queued.ticketPriceNative,
       ticketsSold: queued.ticketsSold,
       houseFeeBps: queued.houseFeeBps,
     });
-    expect(split.grossLamports).toBe(400_000_000n);
-    expect(split.sellerNetLamports).toBe(380_000_000n);
-    expect(split.sellerNetLamports).not.toBe(split.grossLamports);
+    expect(split.grossNative).toBe(400_000_000n);
+    expect(split.sellerNetNative).toBe(380_000_000n);
+    expect(split.sellerNetNative).not.toBe(split.grossNative);
   });
 
   it("carries the winner, so the queue can say where the prize goes", async () => {

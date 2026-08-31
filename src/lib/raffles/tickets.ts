@@ -1,11 +1,15 @@
-import { randomUUID, webcrypto } from "node:crypto";
-import { base58Encode } from "../base58";
+import { randomUUID } from "node:crypto";
+import type { ChainId } from "../chain/adapter";
 import { isUniqueViolation, query, queryOne, transaction } from "../db";
 import { PAYMENT_WINDOW_MINUTES } from "../payments/config";
-import type { SolTransferFailure, SolTransferResult } from "../payments/sol-transfer";
+import type {
+  NativeTransferFailure,
+  NativeTransferResult,
+} from "../payments/native-transfer";
 
 /**
- * Ticket orders and settlement: the step where SOL becomes tickets.
+ * Ticket orders and settlement: the step where a chain's native currency
+ * becomes tickets.
  *
  * This is the one module in the project where a mistake costs somebody real
  * money in either direction — a false settle hands out tickets for nothing, and
@@ -24,10 +28,13 @@ export type TicketOrderStatus = "pending" | "paid" | "expired" | "failed";
 export type TicketOrder = {
   id: string;
   raffleId: string;
+  /** Copied from the raffle at creation; the FK in migration 004 keeps them equal. */
+  chain: ChainId;
   quantity: number;
-  amountLamports: bigint;
+  amountNative: bigint;
   payerPubkey: string;
-  referencePubkey: string;
+  /** Solana Pay's reference. Null on chains with no such convention. */
+  referencePubkey: string | null;
   status: TicketOrderStatus;
   failureReason: string | null;
   createdAt: Date;
@@ -38,10 +45,11 @@ export type TicketOrder = {
 type OrderRow = {
   id: string;
   raffle_id: string;
+  chain: ChainId;
   quantity: number;
-  amount_lamports: string;
+  amount_native: string;
   payer_pubkey: string;
-  reference_pubkey: string;
+  reference_pubkey: string | null;
   status: TicketOrderStatus;
   failure_reason: string | null;
   created_at: Date;
@@ -49,15 +57,16 @@ type OrderRow = {
   paid_at: Date | null;
 };
 
-const ORDER_COLUMNS = `id, raffle_id, quantity, amount_lamports, payer_pubkey, reference_pubkey,
+const ORDER_COLUMNS = `id, raffle_id, chain, quantity, amount_native, payer_pubkey, reference_pubkey,
   status, failure_reason, created_at, expires_at, paid_at`;
 
 function toOrder(row: OrderRow): TicketOrder {
   return {
     id: row.id,
     raffleId: row.raffle_id,
+    chain: row.chain,
     quantity: row.quantity,
-    amountLamports: BigInt(row.amount_lamports),
+    amountNative: BigInt(row.amount_native),
     payerPubkey: row.payer_pubkey,
     referencePubkey: row.reference_pubkey,
     status: row.status,
@@ -74,28 +83,6 @@ export async function orderById(id: string): Promise<TicketOrder | null> {
     [id],
   );
   return row ? toOrder(row) : null;
-}
-
-// --- Reference keys ----------------------------------------------------------
-
-/**
- * The Solana Pay reference for an order: a fresh, unguessable public key that
- * rides along on the payment transaction as a read-only account, so a later
- * pass can find a payment whose payer never came back with the signature.
- *
- * **This project holds no private key and this function is why it stays true.**
- * It generates an Ed25519 keypair and reads out only the public half. The
- * private `CryptoKey` is never exported, never serialised, and never touched
- * again — it falls out of scope. There is deliberately no `exportKey` call on
- * it here or anywhere downstream.
- */
-async function generateReference(): Promise<string> {
-  const keyPair = (await webcrypto.subtle.generateKey({ name: "Ed25519" }, true, [
-    "sign",
-    "verify",
-  ])) as webcrypto.CryptoKeyPair;
-  const rawPublicKey = await webcrypto.subtle.exportKey("raw", keyPair.publicKey);
-  return base58Encode(new Uint8Array(rawPublicKey));
 }
 
 // --- Creating an order -------------------------------------------------------
@@ -125,6 +112,16 @@ export async function createTicketOrder(input: {
   quantity: number;
   payerPubkey: string;
   ipHash: string | null;
+  /**
+   * The chain this raffle settles on, and its per-order reference.
+   *
+   * Both come from the caller rather than being read here, because this module
+   * must not import an adapter: `chain/adapter.ts` imports this file's sibling
+   * `escrow.ts` for a type, and a direct import back would be a cycle. The
+   * route holds the adapter and passes down the two values it produces.
+   */
+  chain: ChainId;
+  reference: string | null;
 }): Promise<CreateOrderResult> {
   if (!Number.isInteger(input.quantity) || input.quantity < 1 || input.quantity > 10_000) {
     return { ok: false, reason: "bad_quantity" };
@@ -132,11 +129,11 @@ export async function createTicketOrder(input: {
 
   const raffle = await queryOne<{
     status: string;
-    ticket_price_lamports: string;
+    ticket_price_native: string;
     max_tickets: number;
     sold: string;
   }>(
-    `SELECT r.status, r.ticket_price_lamports, r.max_tickets,
+    `SELECT r.status, r.ticket_price_native, r.max_tickets,
             (SELECT count(*) FROM tickets t WHERE t.raffle_id = r.id) AS sold
        FROM raffles r WHERE r.id = $1`,
     [input.raffleId],
@@ -147,12 +144,12 @@ export async function createTicketOrder(input: {
   const remaining = raffle.max_tickets - Number(raffle.sold);
   if (input.quantity > remaining) return { ok: false, reason: "not_enough_tickets" };
 
-  const amount = BigInt(raffle.ticket_price_lamports) * BigInt(input.quantity);
+  const amount = BigInt(raffle.ticket_price_native) * BigInt(input.quantity);
   const row = await queryOne<OrderRow>(
     `INSERT INTO ticket_orders
-       (id, raffle_id, quantity, amount_lamports, payer_pubkey, reference_pubkey, ip_hash,
-        expires_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7, now() + ($8 || ' minutes')::interval)
+       (id, raffle_id, quantity, amount_native, payer_pubkey, reference_pubkey, ip_hash,
+        expires_at, chain)
+     VALUES ($1,$2,$3,$4,$5,$6,$7, now() + ($8 || ' minutes')::interval, $9)
      RETURNING ${ORDER_COLUMNS}`,
     [
       `to_${randomUUID().replaceAll("-", "")}`,
@@ -160,9 +157,10 @@ export async function createTicketOrder(input: {
       input.quantity,
       amount.toString(),
       input.payerPubkey,
-      await generateReference(),
+      input.reference,
       input.ipHash,
       String(PAYMENT_WINDOW_MINUTES),
+      input.chain,
     ],
   );
   return { ok: true, order: toOrder(row!) };
@@ -171,7 +169,7 @@ export async function createTicketOrder(input: {
 // --- Settling ----------------------------------------------------------------
 
 export type SettleFailure =
-  | SolTransferFailure
+  | NativeTransferFailure
   | "not_found"
   | "already_settled"
   | "expired"
@@ -213,10 +211,10 @@ const MONEY_ARRIVED: ReadonlySet<string> = new Set([
 export type TicketVerifier = (input: {
   signature: string;
   recipient: string;
-  minLamports: bigint;
+  minAmount: bigint;
   expectedPayer: string;
   window: { fromMs: number; toMs: number };
-}) => Promise<SolTransferResult>;
+}) => Promise<NativeTransferResult>;
 
 /**
  * Turns a verified payment into tickets, atomically.
@@ -263,7 +261,7 @@ export async function settleTicketOrder(input: {
   const verdict = await input.verify({
     signature: input.signature,
     recipient: input.paymentWallet,
-    minLamports: order.amountLamports,
+    minAmount: order.amountNative,
     expectedPayer: order.payerPubkey,
     window: { fromMs: order.createdAt.getTime(), toMs: order.expiresAt.getTime() },
   });
@@ -274,7 +272,7 @@ export async function settleTicketOrder(input: {
         signature: input.signature,
         subjectId: order.id,
         receivedLamports: 0n,
-        expectedLamports: order.amountLamports,
+        expectedLamports: order.amountNative,
         senderPubkey: null,
         reason: verdict.reason,
       });
@@ -325,15 +323,15 @@ export async function settleTicketOrder(input: {
       // a payment nobody can find.
       await client.query(
         `INSERT INTO unmatched_payments
-           (id, signature, subject_id, received_lamports, expected_lamports, sender_pubkey, reason)
+           (id, signature, subject_id, received_native, expected_native, sender_pubkey, reason)
          VALUES ($1,$2,$3,$4,$5,$6,'sold_out')
          ON CONFLICT (signature) DO NOTHING`,
         [
           `um_${randomUUID().replaceAll("-", "")}`,
           input.signature,
           order.id,
-          verdict.lamports.toString(),
-          order.amountLamports.toString(),
+          verdict.amount.toString(),
+          order.amountNative.toString(),
           verdict.payer,
         ],
       );
@@ -398,7 +396,7 @@ async function fileUnmatched(params: {
 }): Promise<void> {
   await query(
     `INSERT INTO unmatched_payments
-       (id, signature, subject_id, received_lamports, expected_lamports, sender_pubkey, reason)
+       (id, signature, subject_id, received_native, expected_native, sender_pubkey, reason)
      VALUES ($1,$2,$3,$4,$5,$6,$7)
      ON CONFLICT (signature) DO NOTHING`,
     [

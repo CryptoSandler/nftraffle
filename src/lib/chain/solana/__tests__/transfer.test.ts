@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { SolanaTransaction } from "../../chain/rpc";
-import { readSolTransfer, verifySolTransfer } from "../sol-transfer";
+import type { SolanaTransaction } from "../rpc";
+import { readSolTransfer, verifySolTransfer } from "../transfer";
 
 /**
  * The native SOL verifier, held to the same discipline as the USDC one.
@@ -48,7 +48,7 @@ describe("reading a native transfer", () => {
     // fee. Only the recipient's side says what actually arrived, and that is
     // the number the fee is checked against.
     const transfer = readSolTransfer(tx({}), RECIPIENT);
-    expect(transfer).toEqual({ payer: PAYER, lamports: 3_000_000n });
+    expect(transfer).toEqual({ payer: PAYER, amount: 3_000_000n });
   });
 
   it("names the signer who lost the most as the payer", () => {
@@ -101,15 +101,15 @@ describe("verifying a registration payment", () => {
 
   it("accepts a transfer of exactly the fee", async () => {
     const result = await verifySolTransfer({
-      signature: "sig", recipient: RECIPIENT, minLamports: fee,
+      signature: "sig", recipient: RECIPIENT, minAmount: fee,
       fetchTransaction: fetcher(tx({})),
     });
-    expect(result).toMatchObject({ ok: true, payer: PAYER, lamports: 3_000_000n });
+    expect(result).toMatchObject({ ok: true, payer: PAYER, amount: 3_000_000n });
   });
 
   it("accepts more than the fee", async () => {
     const result = await verifySolTransfer({
-      signature: "sig", recipient: RECIPIENT, minLamports: fee,
+      signature: "sig", recipient: RECIPIENT, minAmount: fee,
       fetchTransaction: fetcher(tx({ post: [1_000_000, 9_000_000] })),
     });
     expect(result.ok).toBe(true);
@@ -118,7 +118,7 @@ describe("verifying a registration payment", () => {
   it("refuses less than the fee", async () => {
     expect(
       await verifySolTransfer({
-        signature: "sig", recipient: RECIPIENT, minLamports: fee,
+        signature: "sig", recipient: RECIPIENT, minAmount: fee,
         fetchTransaction: fetcher(tx({ post: [8_995_000, 1_000_000] })),
       }),
     ).toMatchObject({ ok: false, reason: "insufficient_amount" });
@@ -128,7 +128,7 @@ describe("verifying a registration payment", () => {
     // It can still be fetched and still name a recipient. It moved nothing.
     expect(
       await verifySolTransfer({
-        signature: "sig", recipient: RECIPIENT, minLamports: fee,
+        signature: "sig", recipient: RECIPIENT, minAmount: fee,
         fetchTransaction: fetcher(tx({ err: { InstructionError: [0, "Custom"] } })),
       }),
     ).toMatchObject({ ok: false, reason: "failed_on_chain" });
@@ -139,7 +139,7 @@ describe("verifying a registration payment", () => {
     (noTime as { blockTime?: number | null }).blockTime = null;
     expect(
       await verifySolTransfer({
-        signature: "sig", recipient: RECIPIENT, minLamports: fee,
+        signature: "sig", recipient: RECIPIENT, minAmount: fee,
         fetchTransaction: fetcher(noTime),
       }),
     ).toMatchObject({ ok: false, reason: "no_block_time" });
@@ -151,7 +151,7 @@ describe("verifying a registration payment", () => {
     // presented as a registration fee.
     expect(
       await verifySolTransfer({
-        signature: "sig", recipient: RECIPIENT, minLamports: fee,
+        signature: "sig", recipient: RECIPIENT, minAmount: fee,
         fetchTransaction: fetcher(tx({ blockTimeMs: Date.now() - 40 * 3_600_000 })),
       }),
     ).toMatchObject({ ok: false, reason: "too_old" });
@@ -160,7 +160,7 @@ describe("verifying a registration payment", () => {
   it("reports an unreachable RPC as ours, not as the payer's fault", async () => {
     expect(
       await verifySolTransfer({
-        signature: "sig", recipient: RECIPIENT, minLamports: fee,
+        signature: "sig", recipient: RECIPIENT, minAmount: fee,
         fetchTransaction: async () => { throw new Error("network"); },
       }),
     ).toMatchObject({ ok: false, reason: "rpc_unavailable" });
@@ -171,7 +171,7 @@ describe("verifying a registration payment", () => {
     // requires a real transfer to have happened — the payer is derived from
     // it — but any amount clears the bar.
     const result = await verifySolTransfer({
-      signature: "sig", recipient: RECIPIENT, minLamports: 0n,
+      signature: "sig", recipient: RECIPIENT, minAmount: 0n,
       fetchTransaction: fetcher(tx({ post: [9_999_000, 1] })),
     });
     expect(result).toMatchObject({ ok: true, payer: PAYER });

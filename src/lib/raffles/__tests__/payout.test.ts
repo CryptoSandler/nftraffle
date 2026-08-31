@@ -18,10 +18,10 @@ const MINT = "8H1yMDsxDs52kZ8kmDzYWiCoTfxLZDvcqcMjxLdbBnRz";
 
 describe("payoutSplit", () => {
   it("splits gross into house fee and seller net", () => {
-    const split = payoutSplit({ ticketPriceLamports: 100_000_000n, ticketsSold: 10, houseFeeBps: 500 });
-    expect(split.grossLamports).toBe(1_000_000_000n);
-    expect(split.houseFeeLamports).toBe(50_000_000n);
-    expect(split.sellerNetLamports).toBe(950_000_000n);
+    const split = payoutSplit({ ticketPriceNative: 100_000_000n, ticketsSold: 10, houseFeeBps: 500 });
+    expect(split.grossNative).toBe(1_000_000_000n);
+    expect(split.houseFeeNative).toBe(50_000_000n);
+    expect(split.sellerNetNative).toBe(950_000_000n);
   });
 
   it("always accounts for every lamport", () => {
@@ -34,33 +34,33 @@ describe("payoutSplit", () => {
       [100_000_000n, 3, 10_000],
       [100_000_000n, 3, 0],
     ] as const) {
-      const split = payoutSplit({ ticketPriceLamports: price, ticketsSold: sold, houseFeeBps: bps });
-      expect(split.houseFeeLamports + split.sellerNetLamports).toBe(split.grossLamports);
-      expect(split.sellerNetLamports).toBeGreaterThanOrEqual(0n);
-      expect(split.houseFeeLamports).toBeGreaterThanOrEqual(0n);
+      const split = payoutSplit({ ticketPriceNative: price, ticketsSold: sold, houseFeeBps: bps });
+      expect(split.houseFeeNative + split.sellerNetNative).toBe(split.grossNative);
+      expect(split.sellerNetNative).toBeGreaterThanOrEqual(0n);
+      expect(split.houseFeeNative).toBeGreaterThanOrEqual(0n);
     }
   });
 
   it("gives the rounding remainder to the seller, never to the house", () => {
     // Rounding a fee up is the platform taking a lamport it did not earn, on
     // every raffle, forever.
-    const split = payoutSplit({ ticketPriceLamports: 1n, ticketsSold: 1, houseFeeBps: 5_000 });
-    expect(split.houseFeeLamports).toBe(0n);
-    expect(split.sellerNetLamports).toBe(1n);
+    const split = payoutSplit({ ticketPriceNative: 1n, ticketsSold: 1, houseFeeBps: 5_000 });
+    expect(split.houseFeeNative).toBe(0n);
+    expect(split.sellerNetNative).toBe(1n);
   });
 
   it("handles a raffle that sold one ticket", () => {
     // The no-minimum rule makes this real (spec §0.6). The seller's create
     // screen shows exactly this number before they list.
-    const split = payoutSplit({ ticketPriceLamports: 250_000_000n, ticketsSold: 1, houseFeeBps: 500 });
-    expect(split.grossLamports).toBe(250_000_000n);
-    expect(split.sellerNetLamports).toBe(237_500_000n);
+    const split = payoutSplit({ ticketPriceNative: 250_000_000n, ticketsSold: 1, houseFeeBps: 500 });
+    expect(split.grossNative).toBe(250_000_000n);
+    expect(split.sellerNetNative).toBe(237_500_000n);
   });
 
   it("handles a raffle that sold nothing", () => {
-    const split = payoutSplit({ ticketPriceLamports: 250_000_000n, ticketsSold: 0, houseFeeBps: 500 });
-    expect(split.grossLamports).toBe(0n);
-    expect(split.sellerNetLamports).toBe(0n);
+    const split = payoutSplit({ ticketPriceNative: 250_000_000n, ticketsSold: 0, houseFeeBps: 500 });
+    expect(split.grossNative).toBe(0n);
+    expect(split.sellerNetNative).toBe(0n);
   });
 });
 
@@ -68,16 +68,19 @@ describe("verifyPayout", () => {
   const base = {
     prizeSignature: "prize-sig",
     proceedsSignature: "proceeds-sig",
-    prizeMint: MINT,
+    prizeAsset: MINT,
     escrowWallet: ESCROW,
     winnerWallet: WINNER,
     sellerWallet: SELLER,
-    sellerNetLamports: 950_000_000n,
+    sellerNetNative: 950_000_000n,
+    // Exact comparison, as Solana requires. See ChainAdapter.sameAddress.
+    sameAddress: (a: string | null | undefined, b: string | null | undefined) =>
+      typeof a === "string" && typeof b === "string" && a === b,
   };
 
   const goodPrize = async () => ({
     ok: true as const,
-    mint: MINT,
+    asset: MINT,
     from: ESCROW,
     to: WINNER,
     blockTimeMs: Date.now(),
@@ -86,7 +89,7 @@ describe("verifyPayout", () => {
   const goodProceeds = async () => ({
     ok: true as const,
     payer: ESCROW,
-    lamports: 950_000_000n,
+    amount: 950_000_000n,
     blockTimeMs: Date.now(),
   });
 
@@ -104,7 +107,7 @@ describe("verifyPayout", () => {
       await verifyPayout({
         ...base,
         readPrizeTransfer: async () => ({
-          ok: true, mint: MINT, from: ESCROW, to: SELLER, blockTimeMs: Date.now(),
+          ok: true, asset: MINT, from: ESCROW, to: SELLER, blockTimeMs: Date.now(),
         }),
         verifyProceeds: goodProceeds,
       }),
@@ -116,7 +119,7 @@ describe("verifyPayout", () => {
       await verifyPayout({
         ...base,
         readPrizeTransfer: async () => ({
-          ok: true, mint: "anotherMint111111111111111111111111111111", from: ESCROW, to: WINNER,
+          ok: true, asset: "anotherMint111111111111111111111111111111", from: ESCROW, to: WINNER,
           blockTimeMs: Date.now(),
         }),
         verifyProceeds: goodProceeds,
@@ -131,7 +134,7 @@ describe("verifyPayout", () => {
       await verifyPayout({
         ...base,
         readPrizeTransfer: async () => ({
-          ok: true, mint: MINT, from: SELLER, to: WINNER, blockTimeMs: Date.now(),
+          ok: true, asset: MINT, from: SELLER, to: WINNER, blockTimeMs: Date.now(),
         }),
         verifyProceeds: goodProceeds,
       }),
@@ -151,16 +154,16 @@ describe("verifyPayout", () => {
   });
 
   it("asks the proceeds verifier for the seller's exact net, paid to the seller", async () => {
-    let asked: { recipient: string; minLamports: bigint } | undefined;
+    let asked: { recipient: string; minAmount: bigint } | undefined;
     await verifyPayout({
       ...base,
       readPrizeTransfer: goodPrize,
       verifyProceeds: async (input) => {
-        asked = { recipient: input.recipient, minLamports: input.minLamports };
-        return { ok: true, payer: ESCROW, lamports: 950_000_000n, blockTimeMs: Date.now() };
+        asked = { recipient: input.recipient, minAmount: input.minAmount };
+        return { ok: true, payer: ESCROW, amount: 950_000_000n, blockTimeMs: Date.now() };
       },
     });
-    expect(asked).toEqual({ recipient: SELLER, minLamports: 950_000_000n });
+    expect(asked).toEqual({ recipient: SELLER, minAmount: 950_000_000n });
   });
 
   it("skips the proceeds leg when the seller's net is zero", async () => {
@@ -170,12 +173,12 @@ describe("verifyPayout", () => {
     let called = false;
     const result = await verifyPayout({
       ...base,
-      sellerNetLamports: 0n,
+      sellerNetNative: 0n,
       proceedsSignature: "",
       readPrizeTransfer: goodPrize,
       verifyProceeds: async () => {
         called = true;
-        return { ok: true, payer: ESCROW, lamports: 0n, blockTimeMs: Date.now() };
+        return { ok: true, payer: ESCROW, amount: 0n, blockTimeMs: Date.now() };
       },
     });
     expect(result).toMatchObject({ ok: true });
@@ -202,7 +205,7 @@ describe("verifyPayout", () => {
       readPrizeTransfer: async () => ({ ok: false, reason: "not_found" }),
       verifyProceeds: async () => {
         proceedsCalled = true;
-        return { ok: true, payer: ESCROW, lamports: 1n, blockTimeMs: Date.now() };
+        return { ok: true, payer: ESCROW, amount: 1n, blockTimeMs: Date.now() };
       },
     });
     expect(proceedsCalled).toBe(false);

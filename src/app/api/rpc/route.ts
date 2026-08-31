@@ -361,7 +361,11 @@ export async function POST(request: Request): Promise<Response> {
   // `SOLANA_RPC_URL` has no default in this project (see payments/config.ts),
   // so an unconfigured deployment has no upstream at all. Answered before the
   // caller is identified: there is nothing to meter access to.
-  if (!rpcConfigured()) {
+  if (!rpcConfigured("solana")) {
+    // Solana only: this proxy exists so the BROWSER can reach a Solana node
+    // without learning the endpoint. The Robinhood surface is closed, and when
+    // it opens it needs its own proxy rather than a chain parameter here —
+    // a caller-selected upstream is a caller-selected upstream.
     console.error("POST /api/rpc: SOLANA_RPC_URL is not set; refusing every request.");
     return json(
       { error: "This deployment has no Solana connection configured." },

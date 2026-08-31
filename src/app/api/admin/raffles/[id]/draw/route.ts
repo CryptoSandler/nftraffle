@@ -1,5 +1,5 @@
 import { requireAdmin } from "../../../../../../lib/admin-guard";
-import { blockhashForSlot } from "../../../../../../lib/chain/rpc";
+import { adapterFor } from "../../../../../../lib/chain/registry";
 import { json, NO_STORE, refuseForeignOrigin } from "../../../../../../lib/http";
 import { rpcConfigured } from "../../../../../../lib/payments/config";
 import { deriveWinner, verifyCommitment } from "../../../../../../lib/raffles/draw";
@@ -46,13 +46,14 @@ export async function POST(
   const guard = await requireAdmin(request, `POST /api/admin/raffles/${id}/draw`);
   if (!guard.ok) return guard.response;
 
-  if (!rpcConfigured()) {
+  const existing = await raffleById(id);
+  if (!existing) return json({ error: "No such raffle." }, { status: 404, headers: NO_STORE });
+
+  const chain = adapterFor(existing.chain);
+  if (!rpcConfigured(existing.chain)) {
     console.error(`POST /api/admin/raffles/${id}/draw: SOLANA_RPC_URL is not set.`);
     return json({ error: "No Solana connection is configured." }, { status: 503, headers: NO_STORE });
   }
-
-  const existing = await raffleById(id);
-  if (!existing) return json({ error: "No such raffle." }, { status: 404, headers: NO_STORE });
 
   // A raffle whose clock ran out may still read `open` if nobody has loaded its
   // page since. Advancing here is what lets an operator draw it.
@@ -73,7 +74,7 @@ export async function POST(
    *
    * The commitment is re-checked below, against what was actually written.
    */
-  const blockhash = await blockhashForSlot(raffle.drawSlot);
+  const blockhash = await chain.hashAtHeight(raffle.drawSlot);
   if (!blockhash) {
     // A skipped slot is ordinary on Solana. Refusing rather than silently
     // walking forward to the next produced slot: which slot was used is part of
@@ -82,8 +83,8 @@ export async function POST(
     return json(
       {
         error:
-          "The announced slot has no block yet, or was skipped. The draw cannot use a different " +
-          "slot than the one announced.",
+          "The announced block has not arrived yet, or that slot was skipped. The draw cannot use " +
+          "a different height than the one announced.",
       },
       { status: 409, headers: NO_STORE },
     );

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { query } from "../../db";
-import type { SolTransferResult } from "../../payments/sol-transfer";
+import type { NativeTransferResult } from "../../payments/native-transfer";
 import { commitSeed } from "../draw";
 import { createDraft, openRaffle, raffleById } from "../lifecycle";
 import {
@@ -46,10 +46,11 @@ async function openRaffleFixture(maxTickets = 10) {
   counter += 1;
   const created = await createDraft({
     slug: `tickets-${counter}`,
+    chain: "solana" as const,
     sellerWallet: SELLER,
-    prizeMint: `mint-${counter}`,
+    prizeAsset: `mint-${counter}`,
     collectionId: null,
-    ticketPriceLamports: PRICE,
+    ticketPriceNative: PRICE,
     maxTickets,
     houseFeeBps: 500,
     drawSlot: 400_000_000n + BigInt(counter),
@@ -66,14 +67,14 @@ async function openRaffleFixture(maxTickets = 10) {
 }
 
 /** A verifier that answers however a test needs, without a network. */
-function verifier(result: SolTransferResult) {
+function verifier(result: NativeTransferResult) {
   return async () => result;
 }
 
-const paid = (lamports: bigint, payer = BUYER): SolTransferResult => ({
+const paid = (amount: bigint, payer = BUYER): NativeTransferResult => ({
   ok: true,
   payer,
-  lamports,
+  amount,
   blockTimeMs: Date.now(),
 });
 
@@ -83,6 +84,8 @@ async function order(raffleId: string, quantity = 1, payer = BUYER) {
     quantity,
     payerPubkey: payer,
     ipHash: "ip-hash",
+    chain: "solana" as const,
+    reference: null,
   });
   if (!result.ok) throw new Error(result.reason);
   return result.order;
@@ -94,24 +97,45 @@ describe("createTicketOrder", () => {
     // price is a fact the raffle owns.
     const raffle = await openRaffleFixture();
     const row = await order(raffle.id, 3);
-    expect(row.amountLamports).toBe(PRICE * 3n);
+    expect(row.amountNative).toBe(PRICE * 3n);
   });
 
-  it("mints a unique reference per order", async () => {
+  it("stores whatever reference the chain supplied, including none", async () => {
+    /**
+     * Solana Pay's reference key is the Solana ADAPTER's business now, not this
+     * module's — `chain/solana/reference.ts` mints it and
+     * `chain/solana/__tests__/reference.test.ts` asserts it is unguessable and
+     * unique. EVM has no such convention and passes null, which is why the
+     * column is nullable (migration 004).
+     *
+     * What this module owes is that it stores what it was given and does not
+     * invent one.
+     */
     const raffle = await openRaffleFixture();
-    const a = await order(raffle.id);
-    const b = await order(raffle.id);
-    expect(a.referencePubkey).not.toBe(b.referencePubkey);
-    expect(a.referencePubkey).toMatch(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/);
+
+    const withRef = await createTicketOrder({
+      raffleId: raffle.id, quantity: 1, payerPubkey: BUYER, ipHash: null,
+      chain: "solana", reference: "ref-abc",
+    });
+    if (!withRef.ok) throw new Error(withRef.reason);
+    expect(withRef.order.referencePubkey).toBe("ref-abc");
+
+    const withoutRef = await createTicketOrder({
+      raffleId: raffle.id, quantity: 1, payerPubkey: BUYER, ipHash: null,
+      chain: "solana", reference: null,
+    });
+    if (!withoutRef.ok) throw new Error(withoutRef.reason);
+    expect(withoutRef.order.referencePubkey).toBeNull();
   });
 
   it("refuses an order on a raffle that is not open", async () => {
     const created = await createDraft({
       slug: "not-open-yet",
+      chain: "solana" as const,
       sellerWallet: SELLER,
-      prizeMint: "mint-draft",
+      prizeAsset: "mint-draft",
       collectionId: null,
-      ticketPriceLamports: PRICE,
+      ticketPriceNative: PRICE,
       maxTickets: 5,
       houseFeeBps: 0,
       drawSlot: 1n,
@@ -124,6 +148,8 @@ describe("createTicketOrder", () => {
       quantity: 1,
       payerPubkey: BUYER,
       ipHash: null,
+    chain: "solana" as const,
+    reference: null,
     })).toEqual({ ok: false, reason: "not_open" });
   });
 
@@ -134,6 +160,8 @@ describe("createTicketOrder", () => {
       quantity: 4,
       payerPubkey: BUYER,
       ipHash: null,
+    chain: "solana" as const,
+    reference: null,
     })).toEqual({ ok: false, reason: "not_enough_tickets" });
   });
 
@@ -148,6 +176,8 @@ describe("createTicketOrder", () => {
       quantity: 2,
       payerPubkey: OTHER,
       ipHash: null,
+    chain: "solana" as const,
+    reference: null,
     });
     expect(second.ok).toBe(true);
   });
@@ -156,7 +186,16 @@ describe("createTicketOrder", () => {
     const raffle = await openRaffleFixture();
     for (const quantity of [0, -1, 1.5, Number.NaN]) {
       expect(
-        (await createTicketOrder({ raffleId: raffle.id, quantity, payerPubkey: BUYER, ipHash: null })).ok,
+        (
+          await createTicketOrder({
+            raffleId: raffle.id,
+            quantity,
+            payerPubkey: BUYER,
+            ipHash: null,
+            chain: "solana",
+            reference: null,
+          })
+        ).ok,
         `quantity=${quantity}`,
       ).toBe(false);
     }
@@ -305,7 +344,7 @@ describe("settleTicketOrder", () => {
       signature: "sig-over",
       paymentWallet: WALLET,
       verify: async (input) => {
-        asked = input.minLamports;
+        asked = input.minAmount;
         return paid(PRICE * 3n);
       },
     });
@@ -379,13 +418,13 @@ describe("settleTicketOrder", () => {
       orderId: second.id, signature: "orphan-sig", paymentWallet: WALLET, verify: verifier(paid(PRICE, OTHER)),
     });
 
-    const filed = await query<{ signature: string; sender_pubkey: string; received_lamports: string }>(
-      `SELECT signature, sender_pubkey, received_lamports FROM unmatched_payments`,
+    const filed = await query<{ signature: string; sender_pubkey: string; received_native: string }>(
+      `SELECT signature, sender_pubkey, received_native FROM unmatched_payments`,
     );
     expect(filed).toHaveLength(1);
     expect(filed[0].signature).toBe("orphan-sig");
     expect(filed[0].sender_pubkey).toBe(OTHER);
-    expect(BigInt(filed[0].received_lamports)).toBe(PRICE);
+    expect(BigInt(filed[0].received_native)).toBe(PRICE);
   });
 
   it("does not file a payment that never reached us", async () => {

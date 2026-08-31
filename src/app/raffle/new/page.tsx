@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { formatSol, houseFeeBps, raffleListingFee } from "../../../lib/payments/config";
+import { adapterFor } from "../../../lib/chain/registry";
+import { houseFeeBps, raffleListingFee } from "../../../lib/payments/config";
 import { surfaceRefusal } from "../../../lib/surfaces";
 
 export const dynamic = "force-dynamic";
@@ -15,9 +16,11 @@ export const dynamic = "force-dynamic";
 export default function NewRafflePage() {
   // See /launch: the refusal helper is what puts the missing-variable list in
   // the server log, where configuration faults belong.
-  const closed = surfaceRefusal("list_raffle", "GET /raffle/new");
-  const listing = raffleListingFee();
-  const house = houseFeeBps();
+  // Solana only while the Robinhood surface is closed (docs/decisions.md).
+  const chain = adapterFor("solana");
+  const closed = surfaceRefusal("list_raffle", "solana", "GET /raffle/new");
+  const listing = raffleListingFee("solana");
+  const house = houseFeeBps("solana");
 
   return (
     <main className="mx-auto w-full max-w-2xl px-6 py-16">
@@ -40,7 +43,7 @@ export default function NewRafflePage() {
           <dl className="mt-8 grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm">
             <dt className="text-neutral-500">Listing fee</dt>
             <dd className="figure">
-              {listing.ok ? `${formatSol(listing.lamports)} SOL` : "—"}
+              {listing.ok ? `${chain.formatNative(listing.amount)} ${chain.nativeSymbol}` : "—"}
             </dd>
             <dt className="text-neutral-500">Platform share of ticket sales</dt>
             <dd className="figure">{house.ok ? `${house.bps} bps` : "—"}</dd>

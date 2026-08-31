@@ -1,5 +1,4 @@
-import { BLOCKTIME_SKEW_SECONDS } from "../payments/config";
-import type { SolTransferResult } from "../payments/sol-transfer";
+import type { NativeTransferResult } from "../payments/native-transfer";
 
 /**
  * Whether a raffle's prize is really in escrow, and whether its listing fee was
@@ -32,7 +31,7 @@ import type { SolTransferResult } from "../payments/sol-transfer";
 type ReadFailure = "not_found" | "failed_on_chain" | "no_transfer" | "rpc_unavailable";
 
 export type EscrowTransfer =
-  | { ok: true; mint: string; from: string; to: string; blockTimeMs: number }
+  | { ok: true; asset: string; from: string; to: string; blockTimeMs: number }
   | { ok: false; reason: ReadFailure };
 
 export type EscrowFailure =
@@ -53,13 +52,17 @@ export type EscrowResult =
 
 export async function verifyEscrowDeposit(input: {
   signature: string;
-  prizeMint: string;
+  prizeAsset: string;
   sellerWallet: string;
   escrowWallet: string;
   /** The draft this deposit must have been made for. */
   draftCreatedAt: Date;
+  /** The chain's clock tolerance. Per chain because the clocks differ, not the concept. */
+  blocktimeSkewSeconds: number;
+  /** The chain's own address comparison — see `ChainAdapter.sameAddress`. */
+  sameAddress: (a: string | null | undefined, b: string | null | undefined) => boolean;
   /** Who owns the mint right now, from DAS. `null` means we could not tell. */
-  currentOwner: (mint: string) => Promise<string | null>;
+  currentOwner: (asset: string) => Promise<string | null>;
   /** What this signature actually moved. */
   readTransfer: (signature: string) => Promise<EscrowTransfer>;
 }): Promise<EscrowResult> {
@@ -68,7 +71,7 @@ export async function verifyEscrowDeposit(input: {
     return { ok: false, reason: transfer.reason, message: FAILURE_MESSAGES[transfer.reason] };
   }
 
-  if (transfer.mint !== input.prizeMint) {
+  if (transfer.asset !== input.prizeAsset) {
     return {
       ok: false,
       reason: "wrong_mint",
@@ -76,7 +79,7 @@ export async function verifyEscrowDeposit(input: {
     };
   }
 
-  if (transfer.to !== input.escrowWallet) {
+  if (!input.sameAddress(transfer.to, input.escrowWallet)) {
     return {
       ok: false,
       reason: "wrong_destination",
@@ -84,7 +87,7 @@ export async function verifyEscrowDeposit(input: {
     };
   }
 
-  if (transfer.from !== input.sellerWallet) {
+  if (!input.sameAddress(transfer.from, input.sellerWallet)) {
     return {
       ok: false,
       reason: "wrong_sender",
@@ -97,7 +100,7 @@ export async function verifyEscrowDeposit(input: {
   // Skew is allowed in the seller's favour for the usual reason: our clock and
   // the cluster's are not the same clock, and thirty seconds either side of a
   // boundary is not the fraud this check is looking for.
-  const floorMs = input.draftCreatedAt.getTime() - BLOCKTIME_SKEW_SECONDS * 1000;
+  const floorMs = input.draftCreatedAt.getTime() - input.blocktimeSkewSeconds * 1000;
   if (transfer.blockTimeMs < floorMs) {
     return {
       ok: false,
@@ -110,7 +113,7 @@ export async function verifyEscrowDeposit(input: {
 
   // Asked LAST, and asked at all, because everything above proves a deposit
   // happened and none of it proves the asset is still there.
-  const owner = await input.currentOwner(input.prizeMint);
+  const owner = await input.currentOwner(input.prizeAsset);
   if (owner === null) {
     // Fails closed. An RPC that cannot answer leaves the deposit-and-withdraw
     // case undetectable, and "we could not check" must never publish a raffle.
@@ -120,7 +123,7 @@ export async function verifyEscrowDeposit(input: {
       message: "The asset's owner could not be read just now. Try again in a moment.",
     };
   }
-  if (owner !== input.escrowWallet) {
+  if (!input.sameAddress(owner, input.escrowWallet)) {
     return {
       ok: false,
       reason: "not_in_escrow",
@@ -160,20 +163,20 @@ export async function verifyListingFee(input: {
   signature: string;
   sellerWallet: string;
   paymentWallet: string;
-  feeLamports: bigint;
+  feeAmount: bigint;
   verify: (input: {
     signature: string;
     recipient: string;
-    minLamports: bigint;
+    minAmount: bigint;
     expectedPayer: string;
-  }) => Promise<SolTransferResult>;
+  }) => Promise<NativeTransferResult>;
 }): Promise<ListingFeeResult> {
-  if (input.feeLamports === 0n) return { ok: true };
+  if (input.feeAmount === 0n) return { ok: true };
 
   const verdict = await input.verify({
     signature: input.signature,
     recipient: input.paymentWallet,
-    minLamports: input.feeLamports,
+    minAmount: input.feeAmount,
     expectedPayer: input.sellerWallet,
   });
 

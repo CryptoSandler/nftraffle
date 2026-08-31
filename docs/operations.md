@@ -138,6 +138,47 @@ migrations merges first; the one with them rebases on top and re-runs. The
 reverse puts the migration-free branch on a `main` whose database has already
 moved.
 
+## Opening the second chain
+
+**One switch: `OPEN_CHAINS` in `src/lib/surfaces.ts`.** Setting the
+`*_ROBINHOOD` variables does NOT open it, and a test asserts that — configuration
+and permission are deliberately two different things, so a deployment can be
+fully configured for a chain it is not yet serving.
+
+**The condition is not a green test suite.** It is one real raffle run end to end
+on Solana: a ticket bought, a draw revealed against a real announced slot, and a
+payout verified against real transfers. The point of the delay is that a bug in
+the shared core gets found once, on the chain that has the audience, instead of
+being fixed twice or blamed on an adapter.
+
+Before opening it, three things need doing that are deliberately deferred:
+
+1. **The ticket-price ceiling is one number for both chains** and is meaningful
+   on Solana only — ten SOL and ten ETH are not comparable sums. Make
+   `SELLER_LIMITS.maxTicketPriceNative` per chain.
+2. **`assetMetadata` returns null on Robinhood.** ERC-721 metadata needs a
+   bounded `tokenURI` fetch — size cap, timeout, no redirects into private
+   ranges — and a half-bounded fetch of attacker-controlled JSON is worse than
+   none.
+3. **`/api/rpc` is Solana-only.** The browser proxy exists so the endpoint stays
+   server-side; the second chain needs its own route rather than a chain
+   parameter, because a caller-selected upstream is a caller-selected upstream.
+
+## Block time on Robinhood Chain, and why it is measured
+
+**≈0.101 s/block, measured 2026-08-31**, not taken from a third party — the
+commonly quoted figure for Nitro chains is ~250ms, which is 2.5× wrong here. The
+measurement and its method are in `src/lib/chain/robinhood/constants.ts`.
+
+**The safety direction is the opposite of Solana's**, which is the part worth
+remembering. Solana can only lag, so an announced slot arrives late and late is
+harmless. Robinhood Chain running *faster* than measured would surface the
+announced block's hash while tickets are still selling. The margin is therefore
+computed at twice the measured rate.
+
+**Re-measure if anything about the chain's cadence changes.** The constant
+carries its date so staleness is visible rather than assumed.
+
 ## Launching: the three things to undo
 
 The site is invisible to search engines by three independent mechanisms, and

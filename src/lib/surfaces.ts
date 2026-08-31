@@ -1,3 +1,4 @@
+import type { ChainId } from "./chain/adapter";
 import {
   escrowWallet,
   houseFeeBps,
@@ -63,40 +64,59 @@ const CLOSED_MESSAGES: Record<Surface, string> = {
  * Read as a list of preconditions rather than as a chain of ifs, so adding a
  * surface is adding a row. Each entry returns a reason string or null.
  */
-const REQUIREMENTS: Record<Surface, () => string | null> = {
+/**
+ * Chains whose surfaces are open at all, whatever their configuration.
+ *
+ * **Robinhood Chain is built and closed.** The approved sequence
+ * (docs/decisions.md) keeps its surface shut until one real raffle has run end
+ * to end on Solana — so that a bug in the shared core is found once, on the
+ * chain that has the audience, rather than fixed twice or misattributed to an
+ * adapter.
+ *
+ * This is the ONE place that opens, deliberately. Putting a second gate in the
+ * config or in the adapter would mean two switches and a way to half-open.
+ * Removing `robinhood` from this set is the whole of "open the second chain",
+ * and the reason to do it is a green Solana raffle, not a green test suite.
+ */
+const OPEN_CHAINS: ReadonlySet<ChainId> = new Set<ChainId>(["solana"]);
+
+const CHAIN_CLOSED_MESSAGE =
+  "This chain is not open on this deployment yet. Nothing has been charged.";
+
+const REQUIREMENTS: Record<Surface, (chain: ChainId) => string | null> = {
   // Selling a ticket needs somewhere for the SOL to go, a chain to verify it
   // on, and a house fee to split the proceeds by at payout time. The fee is
   // required at SALE time rather than at payout time deliberately: a raffle
   // that sold tickets and only then discovered it had no fee configured would
   // be a seller owed an amount nobody can compute.
-  buy_tickets: () =>
+  buy_tickets: (chain) =>
     firstMissing([
-      ["SOLANA_RPC_URL", rpcConfigured()],
-      ["PAYMENT_WALLET", paymentWallet().ok],
-      ["HOUSE_FEE_BPS", houseFeeBps().ok],
+      ["RPC_URL", rpcConfigured(chain)],
+      ["PAYMENT_WALLET", paymentWallet(chain).ok],
+      ["HOUSE_FEE_BPS", houseFeeBps(chain).ok],
     ]),
 
   // Listing needs an escrow wallet to hold the prize, a payment wallet for the
   // listing fee, and the two fees the seller is quoted before they commit.
-  list_raffle: () =>
+  list_raffle: (chain) =>
     firstMissing([
-      ["SOLANA_RPC_URL", rpcConfigured()],
-      ["ESCROW_WALLET", escrowWallet().ok],
-      ["PAYMENT_WALLET", paymentWallet().ok],
-      ["RAFFLE_LISTING_FEE_SOL", raffleListingFee().ok],
-      ["HOUSE_FEE_BPS", houseFeeBps().ok],
+      ["RPC_URL", rpcConfigured(chain)],
+      ["ESCROW_WALLET", escrowWallet(chain).ok],
+      ["PAYMENT_WALLET", paymentWallet(chain).ok],
+      ["RAFFLE_LISTING_FEE", raffleListingFee(chain).ok],
+      ["HOUSE_FEE_BPS", houseFeeBps(chain).ok],
     ]),
 
   // Launching never touches escrow — the creator holds everything and this
   // server custodies nothing in that leg (spec §1). It needs the payment wallet
   // for the launch fee and the platform's mint share, which becomes the candy
   // machine's solFixedFee guard.
-  launch_collection: () =>
+  launch_collection: (chain) =>
     firstMissing([
-      ["SOLANA_RPC_URL", rpcConfigured()],
-      ["PAYMENT_WALLET", paymentWallet().ok],
-      ["LAUNCH_FEE_SOL", launchFee().ok],
-      ["MINT_FEE_BPS", mintFeeBps().ok],
+      ["RPC_URL", rpcConfigured(chain)],
+      ["PAYMENT_WALLET", paymentWallet(chain).ok],
+      ["LAUNCH_FEE", launchFee(chain).ok],
+      ["MINT_FEE_BPS", mintFeeBps(chain).ok],
     ]),
 };
 
@@ -112,8 +132,13 @@ function firstMissing(checks: [name: string, ok: boolean][]): string | null {
  * caller can log it beside the route name, which is the whole point of it being
  * specific.
  */
-export function surfaceState(surface: Surface): SurfaceState {
-  const reason = REQUIREMENTS[surface]();
+export function surfaceState(surface: Surface, chain: ChainId): SurfaceState {
+  // The chain gate first: a chain that is not open should not report which of
+  // its variables are missing, because that is a roadmap rather than an answer.
+  if (!OPEN_CHAINS.has(chain)) {
+    return { open: false, message: CHAIN_CLOSED_MESSAGE, reason: `chain not open: ${chain}` };
+  }
+  const reason = REQUIREMENTS[surface](chain);
   if (!reason) return { open: true };
   return { open: false, message: CLOSED_MESSAGES[surface], reason };
 }
@@ -122,9 +147,13 @@ export function surfaceState(surface: Surface): SurfaceState {
  * The guard for a route handler: logs the reason and returns the visitor's
  * sentence, or null to proceed.
  */
-export function surfaceRefusal(surface: Surface, routeName: string): { message: string } | null {
-  const state = surfaceState(surface);
+export function surfaceRefusal(
+  surface: Surface,
+  chain: ChainId,
+  routeName: string,
+): { message: string } | null {
+  const state = surfaceState(surface, chain);
   if (state.open) return null;
-  console.error(`${routeName}: ${state.reason}`);
+  console.error(`${routeName} [${chain}]: ${state.reason}`);
   return { message: state.message };
 }

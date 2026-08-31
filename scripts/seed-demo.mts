@@ -27,32 +27,32 @@ const WALLET = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 // An open raffle, mid-sale.
 const live = commitSeed();
 const openDraft = await createDraft({
-  slug: "demo-open", sellerWallet: A, prizeMint: "MintOpen1111111111111111111111111111111111",
-  collectionId: null, ticketPriceLamports: 250_000_000n, maxTickets: 20, houseFeeBps: 500,
+  slug: "demo-open", chain: "solana", sellerWallet: A, prizeAsset: "MintOpen1111111111111111111111111111111111",
+  collectionId: null, ticketPriceNative: 250_000_000n, maxTickets: 20, houseFeeBps: 500,
   drawSlot: 999_000_001n, endsAt: new Date(Date.now() + 3 * 3600_000), seedHash: live.seedHash, seedSecret: live.seed,
 });
 if (!openDraft.ok) throw new Error(openDraft.reason);
 const opened = await openRaffle(openDraft.raffle.id, { listingFeeSignature: "seedL1", escrowSignature: "seedE1" });
 if (!opened.ok) throw new Error(opened.reason);
-const o1 = await createTicketOrder({ raffleId: opened.raffle.id, quantity: 3, payerPubkey: B, ipHash: null });
+const o1 = await createTicketOrder({ raffleId: opened.raffle.id, quantity: 3, payerPubkey: B, ipHash: null, chain: "solana", reference: null });
 if (!o1.ok) throw new Error(o1.reason);
 await settleTicketOrder({ orderId: o1.order.id, signature: "seedPay1", paymentWallet: WALLET,
-  verify: async () => ({ ok: true, payer: B, lamports: 750_000_000n, blockTimeMs: Date.now() }) });
+  verify: async () => ({ ok: true, payer: B, amount: 750_000_000n, blockTimeMs: Date.now() }) });
 
 // A drawn raffle, so the verify page has something to check.
 const done = commitSeed();
 const drawnDraft = await createDraft({
-  slug: "demo-drawn", sellerWallet: A, prizeMint: "MintDrawn111111111111111111111111111111111",
-  collectionId: null, ticketPriceLamports: 100_000_000n, maxTickets: 5, houseFeeBps: 500,
+  slug: "demo-drawn", chain: "solana", sellerWallet: A, prizeAsset: "MintDrawn111111111111111111111111111111111",
+  collectionId: null, ticketPriceNative: 100_000_000n, maxTickets: 5, houseFeeBps: 500,
   drawSlot: 999_000_002n, endsAt: new Date(Date.now() + 3600_000), seedHash: done.seedHash, seedSecret: done.seed,
 });
 if (!drawnDraft.ok) throw new Error(drawnDraft.reason);
 const opened2 = await openRaffle(drawnDraft.raffle.id, { listingFeeSignature: "seedL2", escrowSignature: "seedE2" });
 if (!opened2.ok) throw new Error(opened2.reason);
-const o2 = await createTicketOrder({ raffleId: opened2.raffle.id, quantity: 5, payerPubkey: B, ipHash: null });
+const o2 = await createTicketOrder({ raffleId: opened2.raffle.id, quantity: 5, payerPubkey: B, ipHash: null, chain: "solana", reference: null });
 if (!o2.ok) throw new Error(o2.reason);
 await settleTicketOrder({ orderId: o2.order.id, signature: "seedPay2", paymentWallet: WALLET,
-  verify: async () => ({ ok: true, payer: B, lamports: 500_000_000n, blockTimeMs: Date.now() }) });
+  verify: async () => ({ ok: true, payer: B, amount: 500_000_000n, blockTimeMs: Date.now() }) });
 await advanceRaffle(opened2.raffle.id);
 
 const blockhash = "EETubP5AKHgjPAhzPAFcb8BAY1hMH639CWCFTqi3teA9";

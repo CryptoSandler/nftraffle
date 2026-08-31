@@ -47,10 +47,11 @@ async function draft(overrides: Partial<Parameters<typeof createDraft>[0]> = {})
   counter += 1;
   const result = await createDraft({
     slug: `raffle-${counter}`,
+    chain: "solana" as const,
     sellerWallet: SELLER,
-    prizeMint: MINT,
+    prizeAsset: MINT,
     collectionId: null,
-    ticketPriceLamports: 100_000_000n,
+    ticketPriceNative: 100_000_000n,
     maxTickets: 10,
     houseFeeBps: 500,
     drawSlot: 300_000_000n + BigInt(counter),
@@ -78,9 +79,9 @@ async function sellTickets(raffleId: string, count: number, wallet = OTHER_WALLE
   const orderId = `order-${raffleId}-${wallet}-${count}`;
   await query(
     `INSERT INTO ticket_orders
-       (id, raffle_id, quantity, amount_lamports, payer_pubkey, reference_pubkey,
+       (id, raffle_id, chain, quantity, amount_native, payer_pubkey, reference_pubkey,
         status, expires_at, paid_at)
-     VALUES ($1,$2,$3,$4,$5,$6,'paid', now() + interval '1 hour', now())`,
+     VALUES ($1,$2,'solana',$3,$4,$5,$6,'paid', now() + interval '1 hour', now())`,
     [orderId, raffleId, count, 100_000_000n * BigInt(count), wallet, `ref-${orderId}`],
   );
   for (let n = 1; n <= count; n++) {
@@ -114,10 +115,11 @@ describe("createDraft", () => {
     await draft();
     const second = await createDraft({
       slug: "raffle-duplicate",
+      chain: "solana" as const,
       sellerWallet: OTHER_WALLET,
-      prizeMint: MINT,
+      prizeAsset: MINT,
       collectionId: null,
-      ticketPriceLamports: 1n,
+      ticketPriceNative: 1n,
       maxTickets: 1,
       houseFeeBps: 0,
       drawSlot: 1n,
@@ -141,10 +143,11 @@ describe("createDraft", () => {
     await draft({ slug: "taken" });
     const second = await createDraft({
       slug: "taken",
+      chain: "solana" as const,
       sellerWallet: SELLER,
-      prizeMint: "9x1yMDsxDs52kZ8kmDzYWiCoTfxLZDvcqcMjxLdbBnRz",
+      prizeAsset: "9x1yMDsxDs52kZ8kmDzYWiCoTfxLZDvcqcMjxLdbBnRz",
       collectionId: null,
-      ticketPriceLamports: 1n,
+      ticketPriceNative: 1n,
       maxTickets: 1,
       houseFeeBps: 0,
       drawSlot: 1n,
@@ -179,7 +182,7 @@ describe("openRaffle", () => {
     // One deposit opens one raffle. Without this, a seller could point two
     // raffles at one asset by replaying the same transfer.
     const first = await opened();
-    const second = await draft({ slug: "second", prizeMint: "5x1yMDsxDs52kZ8kmDzYWiCoTfxLZDvcqcMjxLdbBnRz" });
+    const second = await draft({ slug: "second", prizeAsset: "5x1yMDsxDs52kZ8kmDzYWiCoTfxLZDvcqcMjxLdbBnRz" });
     const result = await openRaffle(second.id, {
       listingFeeSignature: "unique-listing",
       escrowSignature: `escrow-${first.id}`,

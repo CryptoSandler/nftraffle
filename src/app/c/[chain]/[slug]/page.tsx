@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { asset, assetsInCollection } from "../../../lib/chain/das";
-import { formatSol, isAddressShaped, rpcConfigured } from "../../../lib/payments/config";
+import { isChainId } from "../../../../lib/chain/adapter";
+import { adapterFor } from "../../../../lib/chain/registry";
+import { rpcConfigured } from "../../../../lib/payments/config";
 import {
   collectionBySlug,
-  rafflesByPrizeMints,
+  rafflesForOutsideCollection,
   rafflesForCollection,
   type RaffleSummary,
-} from "../../../lib/raffles/listing";
+} from "../../../../lib/raffles/listing";
 
 export const dynamic = "force-dynamic";
 
@@ -27,8 +28,9 @@ export const dynamic = "force-dynamic";
  *  - `slug` matches a row in `collections` → a collection we launched. It has
  *    numbers we recorded: supply, mint price, and the fee this specific candy
  *    machine charges.
- *  - `slug` is a Solana address → a collection we did not launch. There is no
- *    row, so **everything shown is derived from DAS** and nothing else. No
+ *  - `slug` is an address on `chain` → a collection we did not launch. There
+ *    is no row, so **everything shown is derived from the chain** and nothing
+ *    else. No
  *    supply we did not verify, no price, no fee — because we have none of those
  *    facts and inventing them would make an outside collection look like one we
  *    stand behind.
@@ -36,10 +38,17 @@ export const dynamic = "force-dynamic";
  * That asymmetry is deliberate and visible. A page with fewer facts on it is
  * the honest rendering of a collection we know less about.
  */
-export default async function CollectionPage({ params }: PageProps<"/c/[slug]">) {
-  const { slug } = await params;
+export default async function CollectionPage({ params }: PageProps<"/c/[chain]/[slug]">) {
+  const { chain: chainParam, slug } = await params;
 
-  const launched = await collectionBySlug(slug);
+  // The chain is in the URL, so an unknown one is a 404 rather than a guess
+  // (docs/decisions.md Q10). A collection lives on exactly one chain, and a
+  // Solana mint is not distinguishable from an EVM contract by shape alone in
+  // every case — naming the chain is what stops the route having to guess.
+  if (!isChainId(chainParam)) notFound();
+  const chain = adapterFor(chainParam);
+
+  const launched = await collectionBySlug(chainParam, slug);
   if (launched) {
     const raffles = await rafflesForCollection(launched.id);
     return (
@@ -49,7 +58,7 @@ export default async function CollectionPage({ params }: PageProps<"/c/[slug]">)
           <dd className="figure">{launched.itemsAvailable}</dd>
 
           <dt className="text-neutral-500">Mint price</dt>
-          <dd className="figure">{formatSol(launched.priceLamports)} SOL</dd>
+          <dd className="figure">{chain.formatNative(launched.priceNative)} {chain.nativeSymbol}</dd>
 
           <dt className="text-neutral-500">Platform fee per mint</dt>
           {/* Read from the row, not from the current setting. The guard takes
@@ -57,7 +66,7 @@ export default async function CollectionPage({ params }: PageProps<"/c/[slug]">)
               the live value can disagree with what this collection actually
               charges (spec §0.1). */}
           <dd className="figure">
-            {formatSol(launched.mintFeeLamports)} SOL ({launched.mintFeeBps} bps)
+            {chain.formatNative(launched.mintFeeNative)} {chain.nativeSymbol} ({launched.mintFeeBps} bps)
           </dd>
 
           <dt className="text-neutral-500">Creator</dt>
@@ -76,29 +85,30 @@ export default async function CollectionPage({ params }: PageProps<"/c/[slug]">)
 
   // Not one of ours. The only other thing this slug can be is a collection
   // address, and the only source for it is the chain.
-  if (!isAddressShaped(slug) || !rpcConfigured()) notFound();
+  if (!chain.isAddress(slug) || !rpcConfigured(chainParam)) notFound();
 
-  const metadata = await asset(slug).catch(() => null);
+  const ref = chain.parseAsset(slug);
+  const metadata = ref ? await chain.assetMetadata(ref).catch(() => null) : null;
   if (!metadata) notFound();
 
-  // Bounded on purpose: an unbounded walk is a public page that one large
-  // collection can hold open indefinitely.
-  const items = await assetsInCollection(slug, { limit: 200 }).catch(() => []);
-  const raffles = await rafflesByPrizeMints(items.map((item) => item.mint));
+  // Raffles here whose prize belongs to this collection. Bounded on purpose:
+  // an unbounded walk is a public page that one large collection can hold open
+  // indefinitely.
+  const raffles = await rafflesForOutsideCollection(chainParam, slug);
 
   return (
     <Shell title={metadata.name || slug} subtitle="Not launched here">
       <p className="mt-4 max-w-xl text-sm text-neutral-600">
         {/* Says what it is rather than implying an endorsement. The mint address
             is the only identity claim this page makes, and it is checkable. */}
-        This collection was not launched on this site. Everything below is read from Solana
+        This collection was not launched on this site. Everything below is read from the chain
         directly — there is no supply, price or fee here because we have no part in it.
       </p>
       <dl className="mt-8 grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm">
         <dt className="text-neutral-500">Collection</dt>
         <dd className="figure break-all">{slug}</dd>
-        <dt className="text-neutral-500">Items read</dt>
-        <dd className="figure">{items.length}</dd>
+        <dt className="text-neutral-500">Chain</dt>
+        <dd className="figure">{chain.id}</dd>
       </dl>
       <Raffles raffles={raffles} />
     </Shell>
@@ -142,7 +152,8 @@ function Raffles({ raffles }: { raffles: RaffleSummary[] }) {
                 <div className="flex items-baseline justify-between gap-4">
                   <span className="font-medium">{raffle.slug}</span>
                   <span className="figure text-sm text-neutral-600">
-                    {formatSol(raffle.ticketPriceLamports)} SOL
+                    {adapterFor(raffle.chain).formatNative(raffle.ticketPriceNative)}{" "}
+                    {adapterFor(raffle.chain).nativeSymbol}
                   </span>
                 </div>
                 <p className="mt-1 text-sm text-neutral-600">

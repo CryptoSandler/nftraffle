@@ -1,4 +1,10 @@
-import { RPC_BACKOFF_MAX_MS, RPC_BACKOFF_MS, RPC_COMMITMENT, RPC_MAX_ATTEMPTS, solanaRpcUrls } from "../payments/config";
+import { solanaRpcUrls } from "../../payments/config";
+import {
+  RPC_BACKOFF_MAX_MS,
+  RPC_BACKOFF_MS,
+  RPC_COMMITMENT,
+  RPC_MAX_ATTEMPTS,
+} from "./constants";
 
 /**
  * Talking to Solana from the server, and the shape of what comes back.

@@ -1,5 +1,5 @@
 import { adminSessionLabel } from "../../lib/admin";
-import { formatSol } from "../../lib/payments/config";
+import { adapterFor } from "../../lib/chain/registry";
 import { drawQueue, payoutQueue } from "../../lib/raffles/listing";
 import { payoutSplit } from "../../lib/raffles/payout";
 
@@ -115,26 +115,33 @@ export default async function AdminPage() {
               // when the seller listed, and this figure is what an operator is
               // about to send.
               const split = payoutSplit({
-                ticketPriceLamports: raffle.ticketPriceLamports,
+                ticketPriceNative: raffle.ticketPriceNative,
                 ticketsSold: raffle.ticketsSold,
                 houseFeeBps: raffle.houseFeeBps,
               });
+              // Every figure below is rendered by the raffle's OWN chain: nine
+              // decimals on Solana, eighteen on EVM. One shared formatter would
+              // be off by a billion on half the queue, in the direction where
+              // the number still looks plausible.
+              const chain = adapterFor(raffle.chain);
               return (
                 <li key={raffle.id} className="py-5">
                   <div className="font-medium">{raffle.slug}</div>
                   <dl className="mt-2 grid grid-cols-[max-content_1fr] gap-x-6 gap-y-1 text-sm">
                     <dt className="text-neutral-500">Send this asset</dt>
-                    <dd className="figure break-all">{raffle.prizeMint}</dd>
+                    <dd className="figure break-all">{raffle.prizeAsset}</dd>
                     <dt className="text-neutral-500">To the winner</dt>
                     <dd className="figure break-all">{raffle.winnerWallet}</dd>
                     <dt className="text-neutral-500">Gross</dt>
-                    <dd className="figure">{formatSol(split.grossLamports)} SOL</dd>
+                    <dd className="figure">{chain.formatNative(split.grossNative)} {chain.nativeSymbol}</dd>
                     <dt className="text-neutral-500">Platform fee</dt>
                     <dd className="figure">
-                      {formatSol(split.houseFeeLamports)} SOL ({raffle.houseFeeBps} bps)
+                      {chain.formatNative(split.houseFeeNative)} {chain.nativeSymbol} ({raffle.houseFeeBps} bps)
                     </dd>
                     <dt className="text-neutral-500">Send the seller</dt>
-                    <dd className="figure">{formatSol(split.sellerNetLamports)} SOL</dd>
+                    <dd className="figure">
+                      {chain.formatNative(split.sellerNetNative)} {chain.nativeSymbol}
+                    </dd>
                     <dt className="text-neutral-500">Seller wallet</dt>
                     <dd className="figure break-all">{raffle.sellerWallet}</dd>
                   </dl>

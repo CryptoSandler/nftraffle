@@ -1,5 +1,5 @@
-import { feeLamports } from "../payments/config";
-import type { SolTransferResult } from "../payments/sol-transfer";
+import { feeAmount } from "../payments/config";
+import type { NativeTransferResult } from "../payments/native-transfer";
 import type { EscrowTransfer } from "./escrow";
 
 /**
@@ -21,33 +21,33 @@ import type { EscrowTransfer } from "./escrow";
  */
 
 export type PayoutSplit = {
-  grossLamports: bigint;
-  houseFeeLamports: bigint;
-  sellerNetLamports: bigint;
+  grossNative: bigint;
+  houseFeeNative: bigint;
+  sellerNetNative: bigint;
 };
 
 /**
  * The arithmetic, in one place, so every screen that quotes a figure quotes the
  * same one.
  *
- * **The rounding remainder always goes to the seller.** `feeLamports` rounds
- * down and the net is the subtraction rather than a second percentage
- * calculation, so the two halves add back to the gross exactly — no lamport is
- * created and none goes missing. Computing the net independently would let
+ * **The rounding remainder always goes to the seller.** `feeAmount` rounds down
+ * and the net is the subtraction rather than a second percentage calculation, so
+ * the two halves add back to the gross exactly — no unit is created and none
+ * goes missing, on either chain. Computing the net independently would let
  * rounding produce a total that does not match what was collected, which is the
  * kind of discrepancy nobody notices until somebody reconciles a wallet.
  */
 export function payoutSplit(input: {
-  ticketPriceLamports: bigint;
+  ticketPriceNative: bigint;
   ticketsSold: number;
   houseFeeBps: number;
 }): PayoutSplit {
-  const grossLamports = input.ticketPriceLamports * BigInt(input.ticketsSold);
-  const houseFeeLamports = feeLamports(grossLamports, input.houseFeeBps);
+  const grossNative = input.ticketPriceNative * BigInt(input.ticketsSold);
+  const houseFeeNative = feeAmount(grossNative, input.houseFeeBps);
   return {
-    grossLamports,
-    houseFeeLamports,
-    sellerNetLamports: grossLamports - houseFeeLamports,
+    grossNative,
+    houseFeeNative,
+    sellerNetNative: grossNative - houseFeeNative,
   };
 }
 
@@ -74,24 +74,26 @@ export type PayoutResult =
  * anything else, because it is the leg that cannot be undone.
  *
  * A zero net skips the proceeds leg entirely. A raffle that sold nothing owes
- * the seller nothing, and demanding a zero-lamport transfer as evidence would
+ * the seller nothing, and demanding a zero-value transfer as evidence would
  * block the one payout that legitimately has only a prize leg — returning the
  * asset to the seller.
  */
 export async function verifyPayout(input: {
   prizeSignature: string;
   proceedsSignature: string;
-  prizeMint: string;
+  prizeAsset: string;
   escrowWallet: string;
   winnerWallet: string;
   sellerWallet: string;
-  sellerNetLamports: bigint;
+  sellerNetNative: bigint;
+  /** The chain's own address comparison — see `ChainAdapter.sameAddress`. */
+  sameAddress: (a: string | null | undefined, b: string | null | undefined) => boolean;
   readPrizeTransfer: (signature: string) => Promise<EscrowTransfer>;
   verifyProceeds: (input: {
     signature: string;
     recipient: string;
-    minLamports: bigint;
-  }) => Promise<SolTransferResult>;
+    minAmount: bigint;
+  }) => Promise<NativeTransferResult>;
 }): Promise<PayoutResult> {
   const prize = await input.readPrizeTransfer(input.prizeSignature);
   if (!prize.ok) {
@@ -102,7 +104,7 @@ export async function verifyPayout(input: {
     };
   }
 
-  if (prize.mint !== input.prizeMint) {
+  if (prize.asset !== input.prizeAsset) {
     return {
       ok: false,
       reason: "prize_wrong_mint",
@@ -110,7 +112,7 @@ export async function verifyPayout(input: {
     };
   }
 
-  if (prize.from !== input.escrowWallet) {
+  if (!input.sameAddress(prize.from, input.escrowWallet)) {
     // A transfer of the right asset to the right winner that did not come out
     // of escrow means the asset in escrow is still there, unaccounted for.
     return {
@@ -120,7 +122,7 @@ export async function verifyPayout(input: {
     };
   }
 
-  if (prize.to !== input.winnerWallet) {
+  if (!input.sameAddress(prize.to, input.winnerWallet)) {
     return {
       ok: false,
       reason: "prize_wrong_recipient",
@@ -128,12 +130,12 @@ export async function verifyPayout(input: {
     };
   }
 
-  if (input.sellerNetLamports === 0n) return { ok: true };
+  if (input.sellerNetNative === 0n) return { ok: true };
 
   const proceeds = await input.verifyProceeds({
     signature: input.proceedsSignature,
     recipient: input.sellerWallet,
-    minLamports: input.sellerNetLamports,
+    minAmount: input.sellerNetNative,
   });
   if (!proceeds.ok) return { ok: false, reason: proceeds.reason, message: proceeds.message };
 

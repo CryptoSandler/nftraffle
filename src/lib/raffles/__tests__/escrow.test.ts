@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { SolTransferResult } from "../../payments/sol-transfer";
+import type { NativeTransferResult } from "../../payments/native-transfer";
 import { verifyEscrowDeposit, verifyListingFee } from "../escrow";
 
 /**
@@ -22,16 +22,21 @@ const DEPOSIT_TIME = new Date("2026-08-28T12:05:00Z").getTime();
 function deposit(overrides: Partial<Parameters<typeof verifyEscrowDeposit>[0]> = {}) {
   return verifyEscrowDeposit({
     signature: "escrow-sig",
-    prizeMint: MINT,
+    prizeAsset: MINT,
     sellerWallet: SELLER,
     escrowWallet: ESCROW,
     draftCreatedAt: DRAFT_CREATED_AT,
+    // Solana's tolerance and Solana's address rule. Base58 is case-sensitive,
+    // so the comparison is exact — an EVM adapter passes a case-insensitive one
+    // and getting that backwards on either chain is a real bug.
+    blocktimeSkewSeconds: 120,
+    sameAddress: (a, b) => typeof a === "string" && typeof b === "string" && a === b,
     // The chain says escrow holds it now.
     currentOwner: async () => ESCROW,
     // The chain says this transaction moved it there, from the seller.
     readTransfer: async () => ({
       ok: true,
-      mint: MINT,
+      asset: MINT,
       from: SELLER,
       to: ESCROW,
       blockTimeMs: DEPOSIT_TIME,
@@ -64,7 +69,7 @@ describe("verifyEscrowDeposit", () => {
       await deposit({
         readTransfer: async () => ({
           ok: true,
-          mint: "someOtherMintAddress1111111111111111111111",
+          asset: "someOtherMintAddress1111111111111111111111",
           from: SELLER,
           to: ESCROW,
           blockTimeMs: DEPOSIT_TIME,
@@ -78,7 +83,7 @@ describe("verifyEscrowDeposit", () => {
       await deposit({
         readTransfer: async () => ({
           ok: true,
-          mint: MINT,
+          asset: MINT,
           from: SELLER,
           to: IMPOSTOR,
           blockTimeMs: DEPOSIT_TIME,
@@ -94,7 +99,7 @@ describe("verifyEscrowDeposit", () => {
       await deposit({
         readTransfer: async () => ({
           ok: true,
-          mint: MINT,
+          asset: MINT,
           from: IMPOSTOR,
           to: ESCROW,
           blockTimeMs: DEPOSIT_TIME,
@@ -111,7 +116,7 @@ describe("verifyEscrowDeposit", () => {
       await deposit({
         readTransfer: async () => ({
           ok: true,
-          mint: MINT,
+          asset: MINT,
           from: SELLER,
           to: ESCROW,
           blockTimeMs: new Date("2026-08-28T11:00:00Z").getTime(),
@@ -127,7 +132,7 @@ describe("verifyEscrowDeposit", () => {
       await deposit({
         readTransfer: async () => ({
           ok: true,
-          mint: MINT,
+          asset: MINT,
           from: SELLER,
           to: ESCROW,
           blockTimeMs: DRAFT_CREATED_AT.getTime() - 30_000,
@@ -155,10 +160,10 @@ describe("verifyEscrowDeposit", () => {
 });
 
 describe("verifyListingFee", () => {
-  const feePaid: SolTransferResult = {
+  const feePaid: NativeTransferResult = {
     ok: true,
     payer: SELLER,
-    lamports: 50_000_000n,
+    amount: 50_000_000n,
     blockTimeMs: DEPOSIT_TIME,
   };
 
@@ -167,7 +172,7 @@ describe("verifyListingFee", () => {
       signature: "fee-sig",
       sellerWallet: SELLER,
       paymentWallet: ESCROW,
-      feeLamports: 50_000_000n,
+      feeAmount: 50_000_000n,
       verify: async () => feePaid,
     });
     expect(result).toMatchObject({ ok: true });
@@ -182,7 +187,7 @@ describe("verifyListingFee", () => {
       signature: "fee-sig",
       sellerWallet: SELLER,
       paymentWallet: ESCROW,
-      feeLamports: 50_000_000n,
+      feeAmount: 50_000_000n,
       verify: async (input) => {
         sawExpectedPayer = input.expectedPayer;
         return feePaid;
@@ -196,7 +201,7 @@ describe("verifyListingFee", () => {
       signature: "fee-sig",
       sellerWallet: SELLER,
       paymentWallet: ESCROW,
-      feeLamports: 50_000_000n,
+      feeAmount: 50_000_000n,
       verify: async () => ({ ok: false, reason: "insufficient_amount", message: "too little" }),
     });
     expect(result).toMatchObject({ ok: false, reason: "insufficient_amount" });
@@ -211,7 +216,7 @@ describe("verifyListingFee", () => {
       signature: "",
       sellerWallet: SELLER,
       paymentWallet: ESCROW,
-      feeLamports: 0n,
+      feeAmount: 0n,
       verify: async () => {
         called = true;
         return feePaid;

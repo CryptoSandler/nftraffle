@@ -1,5 +1,6 @@
 import { identify, json, NO_STORE, refuseForeignOrigin } from "../../../../../lib/http";
-import { formatSol, isAddressShaped, paymentWallet } from "../../../../../lib/payments/config";
+import { adapterFor } from "../../../../../lib/chain/registry";
+import { paymentWallet } from "../../../../../lib/payments/config";
 import { advanceRaffle, raffleBySlug } from "../../../../../lib/raffles/lifecycle";
 import { createTicketOrder } from "../../../../../lib/raffles/tickets";
 import { tooManyOrders } from "../../../../../lib/rate-limit";
@@ -29,10 +30,16 @@ export async function POST(
   // Checked before anything costs a round trip: a deployment with no receiving
   // wallet cannot quote a payTo address, so there is nothing an order created
   // now could tell a payer. The specific reason goes to the server log only.
-  const closed = surfaceRefusal("buy_tickets", `POST /api/raffles/${slug}/orders`);
+  const raffle = await raffleBySlug(slug);
+  if (!raffle) return json({ error: "No such raffle." }, { status: 404, headers: NO_STORE });
+
+  // The chain comes from the RAFFLE, never from the request: a caller who could
+  // name the chain could have an EVM receipt verified against a SOL price.
+  const chain = adapterFor(raffle.chain);
+  const closed = surfaceRefusal("buy_tickets", raffle.chain, `POST /api/raffles/${slug}/orders`);
   if (closed) return json({ error: closed.message }, { status: 503, headers: NO_STORE });
 
-  const wallet = paymentWallet();
+  const wallet = paymentWallet(raffle.chain);
   if (!wallet.ok) {
     // Unreachable while `surfaceRefusal` above passes, and kept because the
     // alternative is a non-null assertion on a value that decides where money
@@ -52,8 +59,8 @@ export async function POST(
   if (typeof quantity !== "number" || !Number.isInteger(quantity) || quantity < 1) {
     return json({ error: "quantity must be a whole number of at least 1." }, { status: 400, headers: NO_STORE });
   }
-  if (typeof payerPubkey !== "string" || !isAddressShaped(payerPubkey)) {
-    return json({ error: "payerPubkey must be a Solana address." }, { status: 400, headers: NO_STORE });
+  if (typeof payerPubkey !== "string" || !chain.isAddress(payerPubkey)) {
+    return json({ error: "payerPubkey must be an address on this raffle's chain." }, { status: 400, headers: NO_STORE });
   }
 
   const caller = identify(request);
@@ -67,9 +74,6 @@ export async function POST(
     );
   }
 
-  const raffle = await raffleBySlug(slug);
-  if (!raffle) return json({ error: "No such raffle." }, { status: 404, headers: NO_STORE });
-
   // Advance before selling: a raffle whose clock ran out must not take money,
   // and this project has no cron, so reads are what move it (lifecycle.ts).
   await advanceRaffle(raffle.id);
@@ -79,6 +83,8 @@ export async function POST(
     quantity,
     payerPubkey: payerPubkey.trim(),
     ipHash: caller.ipHash,
+    chain: raffle.chain,
+    reference: await chain.paymentReference(),
   });
 
   if (!result.ok) {
@@ -90,8 +96,9 @@ export async function POST(
     {
       orderId: result.order.id,
       payTo: wallet.address,
-      amountLamports: result.order.amountLamports.toString(),
-      amountSol: formatSol(result.order.amountLamports),
+      amountNative: result.order.amountNative.toString(),
+      amountDisplay: chain.formatNative(result.order.amountNative),
+      nativeSymbol: chain.nativeSymbol,
       reference: result.order.referencePubkey,
       expiresAt: result.order.expiresAt.toISOString(),
     },
