@@ -9,9 +9,10 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "db:migrate": "tsx scripts/migrate.mts",
+    "db:migrate": "tsx scripts/migrate.mts --prod",
     "db:migrate:test": "tsx scripts/migrate.mts --test",
-    "db:up": "npm run db:migrate && npm run db:migrate:test"
+    "db:up": "npm run db:migrate:test && npm run db:migrate:preview",
+    "db:migrate:preview": "tsx scripts/migrate.mts --preview"
   },
   "dependencies": {
     "@solana/wallet-standard-chains": "^1.1.2",

@@ -12,16 +12,51 @@ import { Pool } from "pg";
 
 config({ path: ".env.local" });
 
-const useTest = process.argv.includes("--test");
-const url = useTest ? process.env.TEST_DATABASE_URL : process.env.DATABASE_URL;
+/**
+ * WHICH DATABASE, NAMED EXPLICITLY. There is no default target.
+ *
+ * This used to migrate `DATABASE_URL` whenever `--test` was absent, so a bare
+ * `npm run db:migrate` — or a typo'd flag — pointed at production. That is the
+ * wrong default for the one command whose whole job is to change a schema
+ * irreversibly, and it was only survivable while `DATABASE_URL` meant a Docker
+ * container on a laptop. It now means Neon's `production` branch.
+ *
+ * So production requires `--prod`, spelled out, every time. Naming the target is
+ * cheap; discovering you migrated the wrong one is not.
+ */
+const TARGETS = {
+  "--prod": "DATABASE_URL",
+  "--preview": "PREVIEW_DATABASE_URL",
+  "--test": "TEST_DATABASE_URL",
+} as const;
 
-if (!url) {
+const flags = Object.keys(TARGETS).filter((flag) => process.argv.includes(flag));
+
+if (flags.length !== 1) {
   console.error(
-    `${useTest ? "TEST_DATABASE_URL" : "DATABASE_URL"} is not set. There is no default: ` +
-      "a fallback would mean migrating the wrong database rather than failing.",
+    flags.length === 0
+      ? "Name the target: --prod, --preview or --test. There is deliberately no default."
+      : `Name exactly one target, not ${flags.join(" and ")}.`,
   );
   process.exit(1);
 }
+
+const flag = flags[0] as keyof typeof TARGETS;
+const variable = TARGETS[flag];
+const useTest = flag === "--test";
+const url = process.env[variable];
+
+if (!url) {
+  console.error(
+    `${variable} is not set. There is no default: a fallback would mean migrating ` +
+      "the wrong database rather than failing.",
+  );
+  process.exit(1);
+}
+
+// Says which database is about to change, without printing the credentials that
+// would identify it. The host is enough for a human to recognise the branch.
+console.log(`target ${flag} -> ${variable} @ ${new URL(url).hostname}`);
 
 const pool = new Pool({ connectionString: url });
 const dir = join(process.cwd(), "migrations");

@@ -114,7 +114,7 @@ MINT_FEE_BPS_SOLANA=300
 ```
 
 ```bash
-npm run db:up
+npm run db:migrate:test      # each target is named; there is no default
 cp .env.devnet .env.local && npm run dev
 ```
 

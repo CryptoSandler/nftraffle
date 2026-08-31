@@ -175,6 +175,17 @@ wait for confirmation and try again, and that cost is accepted deliberately: the
 public raffle page shows this mark to the person who did not send the transfers,
 and it is the only thing that person has.
 
+## Migrations name their target
+
+`db:migrate` is `--prod`, `db:migrate:preview` is `--preview`, `db:migrate:test`
+is `--test`. **There is no default**, and every run prints the variable and the
+`ep-*` host before it touches anything.
+
+The old behaviour — anything without `--test` meant `DATABASE_URL` — was
+tolerable while that variable pointed at a Docker container. It now points at
+Neon's `production` branch, where a mis-flagged run is a schema change nobody
+asked for.
+
 ## Test databases
 
 **A branch that adds a migration runs against its OWN database**, deleted when

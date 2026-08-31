@@ -21,17 +21,40 @@ matching pixelwar:
 | `preview` | Vercel Preview | Its own data. A preview deploy must never write to production. |
 | `tests` | the suite | Truncated between tests. |
 
-🧑 Hand over three connection strings. **Keep `sslmode=verify-full`** — `require`
-encrypts but authenticates nothing, so it stops eavesdropping and not
+🧑 Hand over three connection strings, written into `.env.local` by `neonctl`
+rather than pasted — a value that is never displayed is a value that cannot end
+up in a log or a screenshot.
+
+**`production` and `preview` use `sslmode=verify-full`.** libpq's `require`
+encrypts and authenticates nothing, so it stops eavesdropping and not
 impersonation.
+
+**`tests` uses `sslmode=require`, and there is a live caveat.** `pg` 8.23 emits:
+
+> SECURITY WARNING: the SSL modes `prefer`, `require` and `verify-ca` are
+> treated as aliases for `verify-full`. In the next major version these modes
+> will adopt standard libpq semantics, which have weaker security guarantees.
+
+So `require` is currently *stricter* than it reads, and a future `pg` major will
+silently make it weaker. The stake is low — that branch holds disposable
+fixtures and is truncated between tests — but it is the kind of change that
+arrives in a patch bump and tells nobody. **On upgrading past `pg` 8.x, either
+move `tests` to `verify-full` or accept the downgrade deliberately.**
 
 🤖 **Migrate**, once the strings exist:
 
 ```bash
-DATABASE_URL=<production> npm run db:migrate
-DATABASE_URL=<preview>    npm run db:migrate
-TEST_DATABASE_URL=<tests> npm run db:migrate:test
+npm run db:migrate:test      # tests   — and only this one writes the stamp
+npm run db:migrate:preview   # preview
+npm run db:migrate           # production, which is `--prod` spelled out
 ```
+
+**Each target must be named; there is no default.** `db:migrate` used to migrate
+`DATABASE_URL` whenever `--test` was absent, so a bare invocation — or a typo'd
+flag — pointed at production. That was survivable while `DATABASE_URL` meant a
+container on a laptop and is not now that it means Neon's `production` branch.
+Every run prints which variable and which `ep-*` host it is about to change,
+before it changes it.
 
 **Only the third stamps `disposable_database`.** That stamp is written by
 `db:migrate:test` and deliberately not by a migration, so production can never
