@@ -42,15 +42,45 @@ import { primaryEndpoint, rpcCall } from "./rpc";
 export const CORE_PROGRAM_ID = "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d";
 
 /**
- * `TransferV1`'s account order: asset, collection, payer, authority, newOwner.
+ * `TransferV1`'s account order: asset, collection, payer, authority, newOwner,
+ * systemProgram, logWrapper.
  *
- * The authority is the current owner in the ordinary case, and `newOwner` is
- * the recipient. Read by position because that is what the instruction layout
- * fixes; a named lookup would need the IDL, which is a dependency for one field.
+ * **OPTIONAL ACCOUNTS ARE FILLED WITH THE PROGRAM ID, NOT OMITTED**, so the
+ * positions never shift — and that is the trap this constant list exists to
+ * document. `authority` is optional: when the owner signs for themselves it is
+ * left unset and Core writes its own program address into slot 3. An ordinary
+ * self-transfer therefore looks like this on chain:
+ *
+ *     [0] asset
+ *     [1] collection
+ *     [2] payer          <- the actual sender
+ *     [3] CoREENxT6t...  <- placeholder, NOT the authority
+ *     [4] newOwner
+ *
+ * Reading slot 3 as the sender was a real bug, caught by the devnet rehearsal:
+ * it compared the Core program id against the seller's wallet and refused every
+ * legitimate deposit with `wrong_sender`. Nothing in a unit test written from
+ * the IDL would have found it, because the IDL says the account is "authority"
+ * and does not say what fills it when absent.
  */
+const CORE_PROGRAM_PLACEHOLDER = CORE_PROGRAM_ID;
 const ASSET_INDEX = 0;
+const PAYER_INDEX = 2;
 const AUTHORITY_INDEX = 3;
 const NEW_OWNER_INDEX = 4;
+
+/**
+ * Who parted with the asset.
+ *
+ * The authority when one was supplied — a delegate moving somebody else's
+ * asset — and the payer otherwise, which is the ordinary case of an owner
+ * transferring their own. The placeholder check is what tells the two apart.
+ */
+function senderOf(accounts: string[]): string | null {
+  const authority = accounts[AUTHORITY_INDEX];
+  if (authority && authority !== CORE_PROGRAM_PLACEHOLDER) return authority;
+  return accounts[PAYER_INDEX] ?? null;
+}
 
 type Instruction = { programId?: string; accounts?: string[] };
 
@@ -102,10 +132,13 @@ export function readAssetTransferFrom(
     // satisfy a check about either one.
     if (accounts[ASSET_INDEX] !== asset) continue;
 
+    const from = senderOf(accounts);
+    if (!from) continue;
+
     return {
       ok: true,
       asset,
-      from: accounts[AUTHORITY_INDEX],
+      from,
       to: accounts[NEW_OWNER_INDEX],
       blockTimeMs: transaction.blockTime * 1000,
     };

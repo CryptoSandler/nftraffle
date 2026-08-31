@@ -50,6 +50,20 @@ Reaching back and taking more of a sale they already agreed to would be changing
 the terms after the goods were handed over, and the fact that we technically
 could is exactly why the schema is written so that we do not.
 
+## OPEN DEFECT: the draw margin assumes a slot time Solana does not have
+
+**Read [`findings-2026-08-31-draw-margin.md`](findings-2026-08-31-draw-margin.md)
+before running a raffle longer than two hours on mainnet.**
+
+Measured 2026-08-31: mainnet runs at 317 ms/slot and devnet at 166, against the
+400 ms the margin assumes. The announced draw slot therefore arrives EARLIER than
+intended, and for raffles longer than roughly four hours on mainnet it arrives
+before the sale closes — which lets whoever holds the seed compute the winning
+ticket while tickets are still on sale.
+
+**Interim rule until it is fixed: no raffle longer than two hours.** The proper
+fix is to commit to a wall-clock time rather than a slot number.
+
 ## Ceilings a seller may not exceed
 
 **Not in the schema, deliberately.** These bound what a seller may choose and

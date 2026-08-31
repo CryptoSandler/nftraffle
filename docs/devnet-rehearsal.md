@@ -21,6 +21,17 @@ Everything is driven with `solana`, `mplx` and `curl`. **No browser is needed
 for any step**, which is the point: the whole server-side gate is reachable
 without Batch C existing.
 
+**BUDGET AT LEAST 90 MINUTES, and most of it is waiting.** The announced draw
+slot sits a full hour past the raffle's close by design (`SOLANA_DRAW_MARGIN_MS`),
+and the shortest raffle a seller may create is 15 minutes. So the floor is
+15 + 60 ≈ 75 minutes before the draw can run at all, plus setup. Everything up to
+the draw takes about ten minutes; then the clock does the work.
+
+Two things follow. Start the raffle FIRST and run the escrow and ticket
+negatives while it runs — they use a second asset and do not touch it. And do
+not shorten the margin to speed the rehearsal up: it is the property that makes
+the announced slot unknowable when the commitment is published.
+
 ---
 
 ## 0. Prerequisites

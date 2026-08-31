@@ -121,3 +121,59 @@ describe("readAssetTransferFrom", () => {
     expect(readAssetTransferFrom(cpi, ASSET)).toMatchObject({ ok: true, from: OWNER, to: NEW_OWNER });
   });
 });
+
+describe("who parted with the asset", () => {
+  /**
+   * THE BUG THE DEVNET REHEARSAL FOUND, pinned so it cannot come back.
+   *
+   * Core fills OPTIONAL accounts with its own program id rather than omitting
+   * them, so positions never shift. `authority` is optional, and an owner
+   * transferring their own asset leaves it unset — which puts
+   * `CoREENxT6t…` in slot 3 and the real sender in slot 2 (`payer`).
+   *
+   * Reading slot 3 as the sender compared the program id against the seller's
+   * wallet and refused every legitimate escrow deposit with `wrong_sender`.
+   * These fixtures are the account layout of a real devnet transfer.
+   */
+  const OWNER = "F7FfSamtLjDwEx4cpHDV6EqtYjXf8HMDyiF98FbNogXE";
+  const ESCROW = "FbXES1esmvNemD7ia9VBxiwqqHc7aPjmAaiFZ9FTgRjT";
+  const ASSET = "7vijgH3n6ioKknmbnthcg2EsmM5JraX4CNvayAAzyT3H";
+  const COLLECTION = "B7uiR1GhtdFUeEiLpnWT6vaN7bdWjkAcou53Eagma2uq";
+  const CORE = "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d";
+
+  function tx(accounts: string[]) {
+    return {
+      blockTime: 1_800_000_000,
+      meta: { err: null, innerInstructions: [] },
+      transaction: {
+        message: {
+          accountKeys: [{ pubkey: OWNER, signer: true }],
+          instructions: [{ programId: CORE, data: "F", accounts }],
+        },
+      },
+    };
+  }
+
+  it("reads the PAYER as the sender when authority is the program placeholder", () => {
+    const t = tx([ASSET, COLLECTION, OWNER, CORE, ESCROW, CORE, CORE]);
+    expect(readAssetTransferFrom(t, ASSET)).toMatchObject({
+      ok: true,
+      from: OWNER,
+      to: ESCROW,
+    });
+  });
+
+  it("reads the AUTHORITY when a real one signed — a delegate transfer", () => {
+    const DELEGATE = "3Nq7EtQe3aUZLxRUkzYq9c6DdShxWFRp3wY4qWCTGVAH";
+    const t = tx([ASSET, COLLECTION, OWNER, DELEGATE, ESCROW, CORE, CORE]);
+    expect(readAssetTransferFrom(t, ASSET)).toMatchObject({ ok: true, from: DELEGATE });
+  });
+
+  it("never reports the Core program id as the sender", () => {
+    // The specific wrong answer. It can never equal a wallet, so it turns every
+    // real deposit into wrong_sender.
+    const t = tx([ASSET, COLLECTION, OWNER, CORE, ESCROW, CORE, CORE]);
+    const result = readAssetTransferFrom(t, ASSET);
+    expect(result.ok && result.from).not.toBe(CORE);
+  });
+});
