@@ -15,6 +15,8 @@
     "db:migrate:preview": "tsx scripts/migrate.mts --preview"
   },
   "dependencies": {
+    "@solana-program/system": "^0.14.0",
+    "@solana/kit": "^8.2.0",
     "@solana/wallet-standard-chains": "^1.1.2",
     "@solana/wallet-standard-features": "^1.4.0",
     "@solana/wallet-standard-util": "^1.1.3",

@@ -117,7 +117,17 @@ export function classifyEndpoints(endpoints: string[]): ProxyCluster {
   return rest.every((cluster) => cluster === first) ? first : "unknown";
 }
 
-export type PaymentSafety = { ok: true } | { ok: false; message: string };
+export type PaymentSafety =
+  | {
+      ok: true;
+      /**
+       * True when this screen is signing on devnet, which is only ever possible
+       * outside production. Drives a visible banner — a page that admits devnet
+       * signatures without saying so is a page somebody will mistake for real.
+       */
+      devnet: boolean;
+    }
+  | { ok: false; message: string };
 
 /**
  * Whether this screen can honestly ask for a signature, and if not, the one
@@ -150,8 +160,19 @@ export function paymentSafety(input: {
   signingChain: string;
   /** What this deployment's own proxy talks to, classified on the server. */
   proxyCluster: ProxyCluster;
+  /**
+   * Whether this is the production deployment, read server-side from
+   * `VERCEL_ENV` and passed down — never inferred in the browser, where a
+   * hostname is not proof of anything.
+   *
+   * **This is the ONLY thing that admits a devnet signature**, and it admits
+   * exactly devnet: testnet, localnet and an unclassifiable endpoint are still
+   * refused everywhere. Widening it to "anything that is not mainnet" would
+   * turn a rehearsal affordance into a hole.
+   */
+  isProduction: boolean;
 }): PaymentSafety {
-  const { localOrigin, signingChain, proxyCluster } = input;
+  const { localOrigin, signingChain, proxyCluster, isProduction } = input;
 
   if (proxyCluster === "unknown") {
     return {
@@ -170,6 +191,26 @@ export function paymentSafety(input: {
         `would be asked to sign on ${clusterLabel(signingChain)}. Anything signed here could not ` +
         "be credited, so signing is turned off on this screen.",
     };
+  }
+
+  /**
+   * DEVNET, OUTSIDE PRODUCTION ONLY.
+   *
+   * This exists so the buy panel can be rehearsed end to end before real money
+   * (`docs/devnet-rehearsal.md` covers the server side, which never reaches
+   * here). The wallet and the proxy have already been checked to agree, so this
+   * is a deployment deliberately pointed at devnet, on a preview or a
+   * developer's machine.
+   *
+   * `devnet: true` travels with the verdict because the caller must SAY SO.
+   * A screen that quietly accepts devnet signatures is a screen somebody will
+   * mistake for the real one.
+   *
+   * Note that `localOrigin` is not consulted here: a local origin is only a
+   * hazard when real value could move, and on devnet none can.
+   */
+  if (!isProduction && signingChain === "solana:devnet") {
+    return { ok: true, devnet: true };
   }
 
   if (signingChain !== "solana:mainnet") {
@@ -191,5 +232,5 @@ export function paymentSafety(input: {
     };
   }
 
-  return { ok: true };
+  return { ok: true, devnet: false };
 }

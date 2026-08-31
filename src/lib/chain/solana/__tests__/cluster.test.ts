@@ -88,10 +88,11 @@ describe("deciding whether this screen can take a payment", () => {
     localOrigin: false,
     signingChain: "solana:mainnet",
     proxyCluster: "solana:mainnet",
+    isProduction: true,
   } as const;
 
   it("allows a real deployment on a real origin", () => {
-    expect(paymentSafety(live)).toEqual({ ok: true });
+    expect(paymentSafety(live)).toEqual({ ok: true, devnet: false });
   });
 
   // The hole this was built for: the browser only ever sees `/api/rpc`, so
@@ -118,6 +119,7 @@ describe("deciding whether this screen can take a payment", () => {
       localOrigin: true,
       signingChain: "solana:localnet",
       proxyCluster: "solana:localnet",
+      isProduction: true,
     });
     expect(verdict.ok).toBe(false);
     if (verdict.ok) return;
@@ -137,5 +139,108 @@ describe("deciding whether this screen can take a payment", () => {
       if (verdict.ok) continue;
       expect(verdict.message).not.toContain("solana:");
     }
+  });
+});
+
+describe("devnet is allowed outside production, and only there", () => {
+  /**
+   * THE GATE THAT MAKES A DEVNET REHEARSAL OF THE BROWSER FLOW POSSIBLE, and
+   * the one that must never slip into production.
+   *
+   * `docs/devnet-rehearsal.md` drives the API directly and never touches this.
+   * But the buy panel does, and rehearsing THAT on devnet needs devnet
+   * signatures to be permitted — while production stays mainnet-only.
+   *
+   * Both directions are asserted, because a gate tested in one direction is a
+   * gate that only works in one direction.
+   */
+  const devnet = {
+    localOrigin: false,
+    signingChain: "solana:devnet",
+    proxyCluster: "solana:devnet" as const,
+  };
+
+  it("allows devnet when this is not a production deployment", () => {
+    expect(paymentSafety({ ...devnet, isProduction: false })).toEqual({
+      ok: true,
+      devnet: true,
+    });
+  });
+
+  it("REFUSES devnet in production", () => {
+    // The direction that costs money if it is wrong. A production deployment
+    // pointed at devnet would take signatures for transfers that settle
+    // nowhere, on a page that looks entirely normal.
+    const verdict = paymentSafety({ ...devnet, isProduction: true });
+    expect(verdict.ok).toBe(false);
+    if (verdict.ok) throw new Error("unreachable");
+    expect(verdict.message).toMatch(/mainnet/i);
+  });
+
+  it("still refuses testnet and localnet outside production", () => {
+    // Devnet is the ONLY non-mainnet cluster this admits, because devnet is the
+    // only one the rehearsal uses. Widening it to "anything not mainnet" would
+    // make the exception a hole.
+    for (const cluster of ["solana:testnet", "solana:localnet"] as const) {
+      const verdict = paymentSafety({
+        localOrigin: false,
+        signingChain: cluster,
+        proxyCluster: cluster,
+        isProduction: false,
+      });
+      expect(verdict.ok, cluster).toBe(false);
+    }
+  });
+
+  it("still refuses an unknown cluster outside production", () => {
+    // "Cannot tell" is never a yes, on any deployment. An unclassifiable
+    // endpoint is exactly the case this whole module exists for.
+    expect(
+      paymentSafety({
+        localOrigin: false,
+        signingChain: "solana:devnet",
+        proxyCluster: "unknown",
+        isProduction: false,
+      }).ok,
+    ).toBe(false);
+  });
+
+  it("still refuses when the wallet and the proxy disagree, on devnet too", () => {
+    // The buyer would sign on one chain and we would look for the payment on
+    // another. Being outside production does not make that credited.
+    expect(
+      paymentSafety({
+        localOrigin: false,
+        signingChain: "solana:mainnet",
+        proxyCluster: "solana:devnet",
+        isProduction: false,
+      }).ok,
+    ).toBe(false);
+  });
+
+  it("flags mainnet as NOT devnet, so the copy cannot say the wrong thing", () => {
+    // The flag drives a visible banner. A mainnet verdict carrying devnet:true
+    // would put "this is devnet" on a page moving real SOL.
+    expect(
+      paymentSafety({
+        localOrigin: false,
+        signingChain: "solana:mainnet",
+        proxyCluster: "solana:mainnet",
+        isProduction: true,
+      }),
+    ).toEqual({ ok: true, devnet: false });
+  });
+
+  it("refuses a local origin on mainnet regardless of environment", () => {
+    // Unchanged: a page served from a developer's machine that would move real
+    // SOL is refused whether or not VERCEL_ENV says production.
+    expect(
+      paymentSafety({
+        localOrigin: true,
+        signingChain: "solana:mainnet",
+        proxyCluster: "solana:mainnet",
+        isProduction: false,
+      }).ok,
+    ).toBe(false);
   });
 });

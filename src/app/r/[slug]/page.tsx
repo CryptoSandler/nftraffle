@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { adapterFor } from "../../../lib/chain/registry";
+import { classifyEndpoints } from "../../../lib/chain/solana/cluster";
+import { solanaRpcUrls } from "../../../lib/payments/config";
+import { BuyTickets } from "../../../components/BuyTickets";
 import { advanceRaffle, raffleBySlug } from "../../../lib/raffles/lifecycle";
 import { payoutSplit } from "../../../lib/raffles/payout";
 import { ticketsSold } from "../../../lib/raffles/tickets";
@@ -125,12 +128,24 @@ export default async function RafflePage({ params }: PageProps<"/r/[slug]">) {
         {raffle.status !== "open" ? (
           <p className="text-neutral-600">Tickets are no longer on sale for this raffle.</p>
         ) : !buyingClosed ? (
-          <p className="text-neutral-600">
-            {/* The buy panel needs a wallet connection and is the next batch.
-                Saying so plainly beats a button that cannot work. */}
-            Connect a wallet to buy tickets. Payment is a single SOL transfer, verified on chain
-            before any ticket is issued.
-          </p>
+          /*
+           * THE CLUSTER IS CLASSIFIED HERE, ON THE SERVER, AND ONLY ITS ANSWER
+           * GOES DOWN. Never the endpoint: `/api/rpc` exists so a paid
+           * provider's URL stays server-side, and passing it to the browser to
+           * label a screen would undo that from the other direction.
+           *
+           * `isProduction` comes from VERCEL_ENV for the same reason — a
+           * hostname is not proof of anything, and the browser cannot be
+           * trusted to say which deployment it is.
+           */
+          <BuyTickets
+            slug={raffle.slug}
+            proxyCluster={classifyEndpoints(solanaRpcUrls())}
+            isProduction={process.env.VERCEL_ENV === "production"}
+            ticketPriceDisplay={chain.formatNative(raffle.ticketPriceNative)}
+            nativeSymbol={chain.nativeSymbol}
+            ticketsRemaining={raffle.maxTickets - sold}
+          />
         ) : (
           <p className="rounded border border-neutral-300 bg-neutral-50 p-4 text-neutral-700">
             {buyingClosed.message}
