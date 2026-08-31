@@ -340,6 +340,28 @@ clean result today is a measurement, not a guarantee.
 **Trigger to revisit:** either package acquiring an advisory, which is what
 `npm audit` in the close check is for.
 
+## Q13 — The ticket-price ceiling stays shared until Robinhood opens
+
+**Decided: one shared ceiling now; split it per chain the day the Robinhood
+surface opens, and not before.**
+
+`SELLER_LIMITS.maxTicketPriceNative` is a single value expressed in the chain's
+smallest unit. It is meaningful on Solana — ten SOL — and close to meaningless
+on an EVM chain, where the same integer is ten ETH.
+
+**Why it is safe to leave.** Nothing can reach it: `OPEN_CHAINS` in
+`src/lib/surfaces.ts` closes every Robinhood surface, so no raffle can be listed
+on that chain at any price. The wrong ceiling is unreachable rather than merely
+unlikely.
+
+**What it costs.** A second thing to remember at the moment the chain opens,
+which is exactly when attention is elsewhere. That is why it is written in three
+places rather than one: the `// ponytail` comment at the constant, the
+"Opening the second chain" checklist in `docs/operations.md`, and here.
+
+**Trigger:** opening the Robinhood surface. It is item 1 on that checklist and
+the surface should not open with it outstanding.
+
 ## Q6 (restated) — `SUPPORT_CONTACT` stays empty until the domain
 
 Reaffirmed unchanged: the `support@`-on-our-own-domain convention, left empty

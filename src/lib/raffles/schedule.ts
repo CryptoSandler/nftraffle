@@ -36,8 +36,11 @@ export const SELLER_LIMITS = {
    * ten SOL and ten ETH are wildly different sums, so this bound is meaningful
    * on Solana and nearly meaningless on an EVM chain. The Robinhood surface is
    * closed, so nothing can hit it yet.
-   * // ponytail: single ceiling; make it per-chain before the Robinhood surface
-   * // opens, not after.
+   * **The owner's decision (docs/decisions.md Q13): shared now, split per chain
+   * the day the Robinhood surface opens, not before.** Nothing can reach the
+   * wrong value in the meantime, because `OPEN_CHAINS` closes that chain.
+   * // ponytail: single ceiling; make it per-chain as item 1 of the
+   * // "Opening the second chain" checklist in docs/operations.md.
    */
   maxTicketPriceNative: 10_000_000_000n,
   maxTickets: 10_000,
