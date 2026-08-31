@@ -96,6 +96,49 @@ Next.js; no build overrides.
 🧑 Then either log the CLI into that account (`vercel login`) or issue a token
 scoped to it, and everything below becomes 🤖.
 
+### What exists now (created 2026-08-31)
+
+| | |
+|---|---|
+| Project | `nftraffle` in `sandler` — `prj_pNiJc5mAScwFqm4QssdR4OJ3zfBa` |
+| Production | **https://nftraffle.vercel.app** |
+| Git link | **NOT linked** — see below |
+
+**🧑 The GitHub link is the one thing still outstanding, and it is a GitHub-side
+grant rather than a Vercel one.** The Vercel GitHub App is installed on this team
+(pixelwar is linked through it) but has no access to the `nftraffle` repository,
+so both `POST /v11/projects` with a `gitRepository` and `POST /v9/projects/…/link`
+answer *"you need to install the GitHub integration first… make sure you have
+access to the repository"*.
+
+Until it is granted, deploys are CLI-only (`vercel deploy [--prod]`), which works
+— production and preview were both deployed that way. What is missing is
+auto-deploy on push and PR preview URLs.
+
+> **Cowork prompt.** Open **https://github.com/settings/installations** (or the
+> CryptoSandler org's Settings → GitHub Apps), find **Vercel**, choose
+> *Configure*, and under *Repository access* add **CryptoSandler/nftraffle**.
+> Then tell me and I will link it with one API call.
+
+### Preview deployments are SSO-protected, and that blocks automated checks
+
+`ssoProtection` is `all_except_custom_domains`, so the production alias answers
+publicly while a preview URL returns **302 with a 15-byte body**. That is exactly
+the failure §6 warns about: an empty result reads like a clean check.
+
+Vercel's *Protection Bypass for Automation* is the right tool — it keeps SSO on
+for people while letting a script through with an `x-vercel-protection-bypass`
+header. **It is not available on this plan**: `POST /v1/projects/…/protection-bypass`
+answers `404`, and the field is rejected on the project PATCH.
+
+**Do not turn `ssoProtection` off to work around this.** Previews would become
+publicly reachable, and this is a pre-launch project. The options, in order:
+
+1. Enable Protection Bypass for Automation in the dashboard, if the plan allows.
+2. Run preview checks from a browser session that is signed in.
+3. Verify against a local server pointed at the Neon `preview` branch, which
+   tests everything except Vercel's own edge.
+
 🧑 **Root Directory:** repository root. **No `vercel.json` is needed** — this
 project has no crons, unlike pixelwar.
 

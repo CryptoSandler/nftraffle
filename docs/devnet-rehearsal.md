@@ -92,11 +92,21 @@ rate-limited per IP and answers:
 Retrying, smaller amounts and longer sleeps do not help once the daily limit is
 hit — verified. The alternatives, in order of how likely they are to work:
 
-| Route | Works headless? | Notes |
+| Route | Works headless? | Measured behaviour |
 |---|---|---|
-| `https://faucet.solana.com` | **no** | Browser, and it asks for a GitHub login. A person has to do this. |
-| A Helius/QuickNode devnet key | yes | Their RPC's `requestAirdrop` has its own limits. Needs an account. |
-| An existing funded devnet wallet | yes | `solana transfer` from one you already have. |
+| An existing funded devnet wallet | **yes** | `solana transfer` from one you already hold. The only reliably unattended route. |
+| `https://faucet.solana.com` | no | Browser plus a GitHub login. A person has to do it. |
+| A Helius devnet key | **no, and this surprised me** | `requestAirdrop` answers `-32403 Rate limit exceeded. The devnet faucet has a limit of 1 SOL per project per day.` — a **tighter** cap than the public faucet's per-IP one, and it applies to the whole Helius project, so an unrelated earlier request consumes it. Refused at 1.0, 0.5 and 0.1 SOL alike. |
+
+**A Helius key does not remove the browser dependency.** It was recommended here
+on the assumption that a paid provider's faucet would be more generous; measured,
+it is stricter. Its value is DAS throughput and rate limits on ordinary reads,
+not funding.
+
+**The durable fix is a funded devnet wallet kept between rehearsals.** Fund one
+once, by whatever route works that day, and top the five keypairs up from it with
+`solana transfer`. Devnet SOL is not consumed by much — the whole rehearsal costs
+well under 0.1 SOL in fees.
 
 **Fund `seller` and `buyer` with ~1 SOL each, and `escrow` with ~0.1** — escrow
 only pays fees on the payout transfers. `payment` and `impostor` need nothing
