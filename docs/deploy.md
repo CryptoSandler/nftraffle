@@ -134,6 +134,10 @@ answers `404`, and the field is rejected on the project PATCH.
 **Do not turn `ssoProtection` off to work around this.** Previews would become
 publicly reachable, and this is a pre-launch project.
 
+**This is the owner's decision, not an inherited default** — put to them and
+answered on 2026-08-31, recorded as `docs/decisions.md` Q16 with what it gives
+up and what would make it worth reversing. Reverse it there, not here.
+
 **So the devnet rehearsal runs locally, by design, until the plan has Protection
 Bypass for Automation.** That is option 3 below, and it is not a compromise worth
 apologising for: the local server runs the same production build, against the

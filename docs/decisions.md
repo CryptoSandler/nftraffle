@@ -544,6 +544,40 @@ checked "30 days works" would pass under a design whose margin merely shrank
 slowly. Asserting the margin is a constant is what says the defect is gone rather
 than smaller. The interim two-hour rule is removed from `docs/operations.md`.
 
+## Q16 — Preview stays SSO-gated; rehearsals run locally
+
+**Decided 2026-08-31: leave Vercel's deployment protection ON, and keep running
+the devnet rehearsal against a local server rather than the preview hostname.**
+
+The preview deployment is the only one that can create a raffle — production
+deliberately has no `SOLANA_RPC_URL`, no wallets and no fees, so its listing
+surface is closed and says so. Preview is behind `ssoProtection:
+all_except_custom_domains`, and Protection Bypass for Automation is a Pro
+feature that the `sandler` team's Hobby plan does not have, so no script can
+reach it over HTTP.
+
+**The two rejected options, and what each would have cost.** Turning SSO off
+would make the preview URL public to anyone with the link — the devnet surfaces
+and the admin sign-in form included — for a pre-domain project that is
+deliberately unindexed. Putting the devnet configuration into Production would
+have made the surface reachable and is forbidden outright: devnet keypairs are
+loaded in Preview and never in Production, because a devnet address is a
+perfectly valid mainnet address and the mistake is unrecoverable.
+
+**What is given up, stated plainly rather than glossed.** Nothing is verified
+through the preview hostname itself — routing, the platform's own headers, and
+anything that only differs on Vercel's edge. Everything else is covered: the
+local server runs the same commit's production build against the same Neon
+preview branch, the same devnet RPC and the same devnet wallets, which is what
+`docs/deploy.md` already describes as the sanctioned path.
+
+### Trigger to revisit
+
+A Pro plan, or a custom domain. Either one makes the preview reachable to a
+script without exposing it to the public, and at that point the rehearsal should
+run against the real URL and this decision should be reversed rather than
+inherited.
+
 ---
 
 ## Still open
