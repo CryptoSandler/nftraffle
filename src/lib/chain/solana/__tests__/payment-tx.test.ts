@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { compileTransaction } from "@solana/kit";
 import { buildTicketPaymentMessage } from "../payment-tx";
 
 /**
@@ -82,5 +83,53 @@ describe("buildTicketPaymentMessage", () => {
     // that fetched its own would be a second place the endpoint could leak.
     const message = buildTicketPaymentMessage({ ...base, reference: null });
     expect(message.lifetimeConstraint.blockhash).toBe(BLOCKHASH);
+  });
+});
+
+describe("Phantom hygiene: one signer, and the reference never signs", () => {
+  /**
+   * **A transaction with a second signer cannot be signed by anybody.**
+   *
+   * The Solana Pay reference is a keypair this project generates, reads the
+   * public half of, and discards the private half of at the moment of creation
+   * (SECURITY.md I1). There is deliberately no `exportKey` call on it anywhere.
+   * So if it were ever attached as a signer, the payer's wallet would prompt for
+   * a signature nothing on earth can produce — and Phantom's simulation would
+   * fail, which is the red "may be malicious" screen `docs/wallet-warnings.md`
+   * exists to keep away from.
+   *
+   * This is asserted on the COMPILED message rather than on the builder's
+   * inputs, because the compiler is what decides the signer count.
+   */
+  const REFERENCE = "5bNY48R7u6YBTyrFB2X9KyGjvzo3shjhkffgjhdNfouW";
+
+  function compiled(reference: string | null) {
+    const message = buildTicketPaymentMessage({
+      payer: PAYER,
+      payTo: PAY_TO,
+      amountLamports: 50_000_000n,
+      reference,
+      blockhash: BLOCKHASH,
+      lastValidBlockHeight: 100n,
+    });
+    return compileTransaction(message);
+  }
+
+  it("has exactly one signature slot, with and without a reference", () => {
+    // `signatures` is keyed by signer address, so its size IS the signer count.
+    expect(Object.keys(compiled(null).signatures)).toHaveLength(1);
+    expect(Object.keys(compiled(REFERENCE).signatures)).toHaveLength(1);
+  });
+
+  it("the one signer is the payer", () => {
+    expect(Object.keys(compiled(REFERENCE).signatures)).toEqual([PAYER]);
+  });
+
+  it("adding the reference does not add a signer", () => {
+    // The regression this guards: attaching the reference with the wrong
+    // AccountRole. It is a one-word change and it breaks every payment.
+    const withRef = Object.keys(compiled(REFERENCE).signatures);
+    const without = Object.keys(compiled(null).signatures);
+    expect(withRef).toEqual(without);
   });
 });

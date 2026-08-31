@@ -7,6 +7,7 @@ import { tooManyOrders } from "../../../../../lib/rate-limit";
 import { surfaceRefusal } from "../../../../../lib/surfaces";
 import { chainIdFor, robinhoodNetwork } from "../../../../../lib/chain/robinhood/network";
 import { verifyPayerBinding, type BindingFields } from "../../../../../lib/wallet/evm-binding";
+import { buildSolanaPayment } from "../../../../../lib/chain/solana/payment-intent";
 
 export const dynamic = "force-dynamic";
 
@@ -159,12 +160,51 @@ export async function POST(
     return json({ error: FAILURES[result.reason], reason: result.reason }, { status, headers: NO_STORE });
   }
 
+  /**
+   * THE TRANSACTION IS BUILT AND CHECKED HERE, NOT IN THE BROWSER.
+   *
+   * It used to be assembled client-side from the quote below. Moving it server
+   * side is what makes a preflight possible at all: we run the same simulation
+   * Phantom is about to run, against our own node, and if it fails we never open
+   * the wallet (`docs/wallet-warnings.md`).
+   *
+   * The reason is wallet behaviour rather than correctness. A transaction that
+   * cannot succeed makes Phantom show a red "this transaction may be malicious"
+   * interstitial — which reads to a person as a warning about US, and is in fact
+   * a failed simulation. A site that routinely hands wallets transactions that
+   * fail simulation is training its own users to click through the warning that
+   * exists to protect them.
+   *
+   * A refusal here is a `409` carrying ONE sentence about what is wrong, and no
+   * `transaction` field, so the panel has nothing to sign even if it tried.
+   */
+  let payment: Awaited<ReturnType<typeof buildSolanaPayment>> | null = null;
+  if (raffle.chain === "solana") {
+    payment = await buildSolanaPayment({
+      payer: payerPubkey.trim(),
+      payTo: wallet.address,
+      amountLamports: result.order.amountNative,
+      reference: result.order.referencePubkey,
+    });
+    if (!payment.ok) {
+      return json(
+        { error: payment.message, reason: payment.reason },
+        { status: payment.reason === "rpc_unavailable" ? 503 : 409, headers: NO_STORE },
+      );
+    }
+  }
+
   return json(
     {
       orderId: result.order.id,
       payTo: wallet.address,
       amountNative: result.order.amountNative.toString(),
       amountDisplay: chain.formatNative(result.order.amountNative),
+      /**
+       * Present only when the preflight passed. Its absence is what stops a
+       * wallet being opened, rather than a flag the panel could ignore.
+       */
+      ...(payment?.ok ? { transaction: payment.base64Transaction, feeLamports: payment.feeLamports.toString() } : {}),
       nativeSymbol: chain.nativeSymbol,
       reference: result.order.referencePubkey,
       expiresAt: result.order.expiresAt.toISOString(),

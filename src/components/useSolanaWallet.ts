@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { getBase64EncodedWireTransaction, compileTransaction } from "@solana/kit";
 import type { UsableWallet } from "../lib/wallet/solana-standard";
 import { SOLANA_SIGN_AND_SEND, SOLANA_SIGN_TRANSACTION, STANDARD_CONNECT } from "../lib/wallet/solana-standard";
 
@@ -73,12 +72,20 @@ export function useSolanaWallet() {
    * `sendTransaction`, which is on the whitelist. `base64` because that is what
    * the method takes and what `getBase64EncodedWireTransaction` produces.
    */
-  const signAndSend = useCallback(
-    async (message: Parameters<typeof compileTransaction>[0], chain: string): Promise<string> => {
+  const signAndSendWire = useCallback(
+    async (base64Transaction: string, chain: string): Promise<string> => {
       if (!connection) throw new Error("No wallet is connected.");
       const { wallet, account } = connection;
-      const wire = getBase64EncodedWireTransaction(compileTransaction(message));
-      const bytes = Uint8Array.from(atob(wire), (c) => c.charCodeAt(0));
+      /**
+       * The bytes come from the SERVER, already compiled and already simulated
+       * there. Nothing is assembled in the browser any more — see
+       * `lib/chain/solana/payment-intent.ts` and `docs/wallet-warnings.md`.
+       *
+       * `chain` is passed explicitly on every call. A Wallet Standard wallet
+       * that is not told which chain may pick one, and the one it picks is
+       * whatever it was last set to.
+       */
+      const bytes = Uint8Array.from(atob(base64Transaction), (c) => c.charCodeAt(0));
 
       if (wallet.capability === "sign_and_send") {
         const feature = wallet.wallet.features[SOLANA_SIGN_AND_SEND] as SignAndSendFeature;
@@ -114,7 +121,7 @@ export function useSolanaWallet() {
     [connection],
   );
 
-  return { connection, connecting, connect, disconnect, signAndSend };
+  return { connection, connecting, connect, disconnect, signAndSendWire };
 }
 
 function toBase64(bytes: Uint8Array): string {

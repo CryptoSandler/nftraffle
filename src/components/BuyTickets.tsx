@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { buildTicketPaymentMessage } from "../lib/chain/solana/payment-tx";
 import { isLocalHostname, paymentSafety, type ProxyCluster } from "../lib/chain/solana/cluster";
 import { checkoutOutcome, isRetryableConfirmReason, walletErrorMessage } from "../lib/checkout";
 import { useSolanaWallet } from "./useSolanaWallet";
@@ -56,7 +55,7 @@ export function BuyTickets({
   // and `paymentSafety` is what refuses when it does not.
   const signingChain = proxyCluster === "unknown" ? "unknown" : proxyCluster;
   const wallets = useSolanaWallets(signingChain);
-  const { connection, connecting, connect, signAndSend } = useSolanaWallet();
+  const { connection, connecting, connect, signAndSendWire } = useSolanaWallet();
 
   const safety = paymentSafety({
     localOrigin: typeof window !== "undefined" && isLocalHostname(window.location.hostname),
@@ -85,34 +84,28 @@ export function BuyTickets({
         return;
       }
 
-      setPhase({ step: "working", note: "Waiting for your wallet…" });
-
-      // The blockhash comes through our proxy, like every other chain read.
-      const blockhashResponse = await fetch("/api/rpc/solana", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getLatestBlockhash", params: [] }),
-      });
-      const blockhashBody = await blockhashResponse.json();
-      const lifetime = blockhashBody?.result?.value;
-      if (!lifetime?.blockhash) {
-        setPhase({ step: "error", message: "The network could not be reached. Try again." });
+      /**
+       * THE SERVER BUILT THIS TRANSACTION AND ALREADY SIMULATED IT.
+       *
+       * The panel used to fetch a blockhash and assemble the transfer itself.
+       * It does not any more: the order response carries the compiled,
+       * unsigned transaction, and it only carries one when the server's
+       * preflight passed (`docs/wallet-warnings.md`). Its ABSENCE is what stops
+       * a wallet opening — not a flag this code could misread.
+       */
+      if (!order.transaction) {
+        setPhase({
+          step: "error",
+          message: order.error ?? "This payment could not be prepared. Nothing has been charged.",
+        });
         return;
       }
 
-      const message = buildTicketPaymentMessage({
-        payer: connection.account.address,
-        payTo: order.payTo,
-        // The server's quote, not a figure recomputed here.
-        amountLamports: BigInt(order.amountNative),
-        reference: order.reference ?? null,
-        blockhash: lifetime.blockhash,
-        lastValidBlockHeight: BigInt(lifetime.lastValidBlockHeight ?? 0),
-      });
+      setPhase({ step: "working", note: "Waiting for your wallet…" });
 
       let signature: string;
       try {
-        signature = await signAndSend(message, signingChain);
+        signature = await signAndSendWire(order.transaction, signingChain);
       } catch (error) {
         console.error(error);
         setPhase({ step: "error", message: walletErrorMessage(error) });
