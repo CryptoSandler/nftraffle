@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { IMAGE_HOSTS as IMAGE_HOST_SOURCES } from "./src/lib/image-hosts";
 
 /**
  * Security headers and the pre-launch noindex.
@@ -8,32 +9,12 @@ import type { NextConfig } from "next";
  */
 
 /**
- * Hosts a metadata image may load from.
- *
- * **This list is the browser-enforced half of a rule the server already
- * follows.** Every image in this product comes from DAS — there is no upload
- * path and no form field that accepts a URL (spec §1, leg 3) — and DAS reports
- * whatever URI the asset's on-chain metadata points at. That URI is written by
- * whoever minted the asset, so it is attacker-controlled by construction: a
- * hostile collection can point its image at any host on the internet, and
- * rendering it would leak every viewer's address and user-agent to that host.
- *
- * So the allowlist is the permanent-storage gateways and IPFS gateways real
- * Solana metadata actually uses. An asset whose image is hosted elsewhere shows
- * as a blank frame rather than as a request we did not intend to make, and that
- * is the correct trade: a missing thumbnail costs a viewer nothing.
+ * The image host allowlist now lives in `src/lib/image-hosts.ts`, because the
+ * SERVER needs to consult it too — it decides whether to emit a URL at all, and
+ * a server that emits what the browser then blocks renders a broken frame
+ * instead of an honest placeholder. One list, enforced in two places.
  */
-const IMAGE_HOSTS = [
-  "https://arweave.net",
-  "https://*.arweave.net",
-  "https://gateway.irys.xyz",
-  "https://*.irys.xyz",
-  "https://ipfs.io",
-  "https://*.ipfs.nftstorage.link",
-  "https://nftstorage.link",
-  "https://cloudflare-ipfs.com",
-  "https://shdw-drive.genesysgo.net",
-].join(" ");
+const IMAGE_HOSTS = IMAGE_HOST_SOURCES.join(" ");
 
 const CSP = [
   "default-src 'self'",

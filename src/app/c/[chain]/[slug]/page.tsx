@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { assetDisplays } from "../../../../lib/chain/asset-display";
+import { AssetImage } from "../../../../components/AssetImage";
+import { Countdown } from "../../../../components/Countdown";
 import { isChainId } from "../../../../lib/chain/adapter";
 import { adapterFor } from "../../../../lib/chain/registry";
 import { rpcConfigured } from "../../../../lib/payments/config";
@@ -136,7 +139,9 @@ function Shell({
   );
 }
 
-function Raffles({ raffles }: { raffles: RaffleSummary[] }) {
+async function Raffles({ raffles }: { raffles: RaffleSummary[] }) {
+  // Resolved once for the whole list and in parallel, like the home page.
+  const displays = await assetDisplays(raffles);
   return (
     <section className="mt-12">
       <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-neutral-500">
@@ -146,23 +151,43 @@ function Raffles({ raffles }: { raffles: RaffleSummary[] }) {
         <p className="text-neutral-600">No raffles for this collection yet.</p>
       ) : (
         <ul className="divide-y divide-neutral-200 border-y border-neutral-200">
-          {raffles.map((raffle) => (
-            <li key={raffle.id} className="py-4">
-              <Link className="block hover:bg-neutral-50" href={`/r/${raffle.slug}`}>
-                <div className="flex items-baseline justify-between gap-4">
-                  <span className="font-medium">{raffle.slug}</span>
-                  <span className="figure text-sm text-neutral-600">
-                    {adapterFor(raffle.chain).formatNative(raffle.ticketPriceNative)}{" "}
-                    {adapterFor(raffle.chain).nativeSymbol}
-                  </span>
-                </div>
-                <p className="mt-1 text-sm text-neutral-600">
-                  <span className="figure">{raffle.ticketsSold}</span> of{" "}
-                  <span className="figure">{raffle.maxTickets}</span> tickets · {raffle.status}
-                </p>
-              </Link>
-            </li>
-          ))}
+          {raffles.map((raffle) => {
+            const display = displays.get(`${raffle.chain}:${raffle.prizeAsset}`);
+            return (
+              <li key={raffle.id} className="py-4">
+                <Link className="flex gap-4 hover:bg-neutral-50" href={`/r/${raffle.slug}`}>
+                  <AssetImage
+                    src={display?.imageUrl ?? null}
+                    name={display?.name ?? raffle.prizeAsset}
+                    className="h-16 w-16 shrink-0"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline justify-between gap-4">
+                      {/* The asset's name, never the slug — the slug is the URL. */}
+                      <span className="truncate font-medium">{display?.name ?? raffle.prizeAsset}</span>
+                      <span className="figure shrink-0 text-sm text-neutral-600">
+                        {adapterFor(raffle.chain).formatNative(raffle.ticketPriceNative)}{" "}
+                        {adapterFor(raffle.chain).nativeSymbol}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm text-neutral-600">
+                      <span className="figure">{raffle.ticketsSold}</span> of{" "}
+                      <span className="figure">{raffle.maxTickets}</span> tickets · {raffle.status}
+                    </p>
+                    {raffle.status === "open" && (
+                      <p className="mt-1">
+                        <Countdown
+                          targetMs={raffle.endsAt.getTime()}
+                          label="closes in"
+                          elapsedLabel="closed"
+                        />
+                      </p>
+                    )}
+                  </div>
+                </Link>
+              </li>
+            );
+          })}
         </ul>
       )}
     </section>

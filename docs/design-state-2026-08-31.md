@@ -1,5 +1,10 @@
 # Visual state — a report, not a redesign
 
+> **Updated 2026-08-31, after the legibility batch.** §3's first three gaps —
+> no clock, raffles titled by slug, no images — are closed; §4's recommendation
+> was carried out. The palette gaps are untouched and deliberately so. Screens
+> in `design-shots/before/` and `design-shots/after/`.
+
 Asked for on 2026-08-31: does `DESIGN.md` exist as it does in the sibling
 projects, what do the main surfaces actually look like, and which parts are at
 the level versus placeholder. **No design work was done in this batch** — this
@@ -67,23 +72,37 @@ page, for the person who did *not* send them. Correct and understated.
 meaning *the clock, and nothing else*. That accent does not exist. Nothing on
 any screen is coloured.
 
-**There is no clock, on a product whose stated register is "a clock running down
-in public".** The raffle page renders `Closes 2026-08-31T21:55:05.841Z` — a raw
-ISO 8601 string, milliseconds included. It is precise, machine-readable, and the
-opposite of the emotional register the design brief names. This is the single
-widest gap between what `DESIGN.md` says the product is and what it looks like.
+~~**There is no clock**~~ — **CLOSED.** Every open raffle now shows
+`Closes in 17m 07s` beside `2026-08-31T23:41:56Z`. Both, deliberately: the
+countdown is for deciding, the instant is for checking, and this product's claim
+is that what it says can be checked. Milliseconds are gone from every timestamp
+on every page; seconds stay. `drawAt` gets the same treatment, and counts down
+too once a raffle is closed and waiting on its anchor.
 
-**Raffles are titled by slug.** The home page lists `bx42aeje-mthrgkq9` and
-`bgrtgjmq-mthrqbrh` as headings. Those are machine tokens on screen — the exact
+~~**Raffles are titled by slug**~~ — **CLOSED.** The home page listed
+`bx42aeje-mthrgkq9` and `bgrtgjmq-mthrqbrh` as headings. Those are machine tokens on screen — the exact
 thing this project's own rules object to elsewhere — and they are the first
 thing a visitor reads. The data to do better now exists on both chains
 (`assetMetadata` returns a name; the Robinhood side started working this
 session), and it is not being used on any listing surface.
 
-**No images anywhere.** The prize is rendered as a mint address. `assetMetadata`
-returns an image URL and nothing consumes it. For a product whose inventory is
-*pictures*, this is the most conspicuous absence, and on the raffle page it
-leaves a 44-character base58 string where the thing being sold should be.
+~~**No images anywhere**~~ — **CLOSED, with one honest limit.** Every listing row
+and the raffle page render the asset's image, or a placeholder that says
+`no image` rather than a spinner or an empty box.
+
+**Our server never fetches an image.** It only decides whether to emit a URL,
+against the same allowlist the CSP enforces — so a host we would not load from
+produces a placeholder rather than a frame the browser then blocks. A plain
+`<img>` is used rather than `next/image` precisely because Next's pipeline would
+fetch the source on our server, outside every bound `chain/metadata-fetch.ts`
+sets.
+
+**Not proven visually:** the devnet fixtures all point at `example.invalid`, and
+the one real Robinhood token found is fully on-chain with a `data:` image, which
+is dropped by design. So every screenshot shows the placeholder. The
+image-present path is covered by tests (`asset-display.test.ts`,
+`image-hosts.test.ts`) and has not been seen on a screen with a real picture in
+it.
 
 **No wordmark.** "nftraffle" is set in the body sans at `text-2xl`. Correct for
 now — §11 forbids baking a placeholder name into an image — but it means the
@@ -103,7 +122,7 @@ and it is used for every field label including the ones next to prices.
 
 ---
 
-## 4. The one thing I would fix first
+## 4. The one thing I would fix first — done
 
 Not the palette. **Give a raffle a name and a picture.**
 
@@ -117,7 +136,8 @@ be designed around instead of placeholder rows.
 Second would be the countdown, for the same reason: it is the product's own
 stated register and it is currently an ISO timestamp.
 
-**Neither is in this batch**, per the instruction to report and not redesign.
+**Both were done in the batch that followed this report**, in that order. What
+remains below is the palette work, which is still not started.
 
 ---
 

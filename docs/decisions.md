@@ -678,6 +678,45 @@ The first Solana raffle that sells to strangers rather than to us. Before that
 the hole has no population to exploit it; after it, this should be levelled up
 rather than levelled down.
 
+## Q19 — The three design questions, answered
+
+Put to the owner with `docs/design-state-2026-08-31.md` §5 and answered
+2026-08-31. These settle what a palette pass may assume; they do not start one.
+
+**1. The accent has exactly one job: the clock.** Time remaining, and nothing
+else. Not buttons, not links, not the buy call-to-action, not errors. An accent
+that appears on ordinary controls stops meaning anything, and this one is meant
+to be the only coloured thing on a page so that a person's eye goes to the
+number that is running out.
+
+This is unusual and the cost is real: the primary action on the page will be
+black-on-white like everything else. Accepted deliberately — the product's claim
+is that it is honest about a countdown, not that it is good at selling.
+
+**2. Zero casino.** Not "restrained casino", not "casino register used
+sparingly". No gold, no red urgency, no animation on a number, no confetti on a
+win, no language that borrows from gambling marketing. `DESIGN.md` §2 rejected
+both the casino and the marketplace registers; the owner's answer resolves the
+space between them toward the plain end.
+
+The reasoning is in DESIGN.md §8 already: this product sells chance for money,
+and the fastest way to look like the thing people are right to be suspicious of
+is to dress like it.
+
+**3. The wordmark waits for the domain.** Unchanged from §11 — `nftraffle` is a
+working name and nothing may bake it into an image. The home page therefore has
+no identity mark, and that is the correct state until there is a name worth
+setting.
+
+### What this batch did with them
+
+Legibility first, no palette
+(`docs/design-state-2026-08-31.md` §4). The accent does not exist yet, so the
+countdown built in this batch is set in the ordinary text colour. **When the
+palette arrives, the countdown is the one element that gets the accent** — it is
+already the only element that would be entitled to it, which is what answer 1
+was for.
+
 ---
 
 ## Still open

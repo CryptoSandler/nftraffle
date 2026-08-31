@@ -7,6 +7,8 @@ import {
   verifyCommitment,
 } from "../../../../lib/raffles/draw";
 import { raffleBySlug } from "../../../../lib/raffles/lifecycle";
+import { assetDisplay } from "../../../../lib/chain/asset-display";
+import { utcInstant } from "../../../../lib/countdown";
 import { ticketsFor } from "../../../../lib/raffles/tickets";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +34,7 @@ export default async function VerifyPage({ params }: PageProps<"/r/[slug]/verify
   if (!raffle) notFound();
 
   const tickets = await ticketsFor(raffle.id);
+  const asset = await assetDisplay(raffle.chain, raffle.prizeAsset);
   const revealed = raffle.seed !== null && raffle.drawBlockhash !== null;
 
   const commitmentHolds = revealed ? verifyCommitment(raffle.seed!, raffle.seedHash) : null;
@@ -92,6 +95,9 @@ export default async function VerifyPage({ params }: PageProps<"/r/[slug]/verify
       </Link>
 
       <h1 className="mt-6 text-2xl font-semibold tracking-tight">How this draw was computed</h1>
+      {/* Named, so a reader arriving from a link knows which raffle they are
+          checking without decoding a slug. */}
+      <p className="mt-1 text-neutral-600">{asset.name}</p>
 
       <section className="mt-8">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
@@ -166,16 +172,18 @@ winningTicket  = (material as a big-endian integer mod ticketCount) + 1`}
           <dd className="figure break-all">{raffle.seedHash}</dd>
 
           <dt className="text-neutral-500">anchored to (published at creation)</dt>
-          <dd className="figure">{raffle.drawAt.toISOString()}</dd>
+          <dd className="figure">{utcInstant(raffle.drawAt)}</dd>
 
           <dt className="text-neutral-500">closed at</dt>
-          <dd className="figure">{raffle.endsAt.toISOString()}</dd>
+          <dd className="figure">{utcInstant(raffle.endsAt)}</dd>
 
           <dt className="text-neutral-500">block used</dt>
           <dd className="figure">{raffle.drawHeight?.toString() ?? "not resolved yet"}</dd>
 
           <dt className="text-neutral-500">that block&apos;s time</dt>
-          <dd className="figure">{raffle.drawBlockTime?.toISOString() ?? "not resolved yet"}</dd>
+          <dd className="figure">
+            {raffle.drawBlockTime ? utcInstant(raffle.drawBlockTime) : "not resolved yet"}
+          </dd>
 
           <dt className="text-neutral-500">seed</dt>
           <dd className="figure break-all">{raffle.seed ?? "not revealed"}</dd>

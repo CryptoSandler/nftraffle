@@ -1,5 +1,6 @@
 import { adminSessionLabel } from "../../lib/admin";
 import { adapterFor } from "../../lib/chain/registry";
+import { assetDisplays } from "../../lib/chain/asset-display";
 import { drawQueue, payoutQueue } from "../../lib/raffles/listing";
 import { payoutSplit } from "../../lib/raffles/payout";
 
@@ -57,6 +58,9 @@ export default async function AdminPage() {
   }
 
   const [draws, payouts] = await Promise.all([drawQueue(), payoutQueue()]);
+  // Both queues at once: an operator reads them together, and resolving twice
+  // would double the calls for the raffles that appear in both.
+  const displays = await assetDisplays([...draws, ...payouts]);
 
   return (
     <main className="mx-auto w-full max-w-3xl px-6 py-16">
@@ -80,11 +84,14 @@ export default async function AdminPage() {
             {draws.map((raffle) => (
               <li key={raffle.id} className="py-4">
                 <div className="flex items-baseline justify-between gap-4">
-                  <span className="font-medium">{raffle.slug}</span>
+                  <span className="font-medium">
+                    {displays.get(`${raffle.chain}:${raffle.prizeAsset}`)?.name ?? raffle.slug}
+                  </span>
                   <span className="figure text-sm text-neutral-600">
                     {raffle.ticketsSold} tickets
                   </span>
                 </div>
+                <div className="figure text-xs text-neutral-500">{raffle.slug}</div>
                 <form
                   action={`/api/admin/raffles/${raffle.id}/draw`}
                   method="post"
@@ -126,7 +133,18 @@ export default async function AdminPage() {
               const chain = adapterFor(raffle.chain);
               return (
                 <li key={raffle.id} className="py-5">
-                  <div className="font-medium">{raffle.slug}</div>
+                  {/**
+                   * NAMED HERE FOR A REASON THAT IS NOT COSMETIC. This queue is
+                   * where an operator transfers somebody else's NFT by hand,
+                   * and a screen that identifies the prize only by a base58
+                   * string is a screen where sending the wrong one is an easy
+                   * mistake. The address stays below, because that is what gets
+                   * pasted into the transfer.
+                   */}
+                  <div className="font-medium">
+                    {displays.get(`${raffle.chain}:${raffle.prizeAsset}`)?.name ?? raffle.slug}
+                  </div>
+                  <div className="figure text-xs text-neutral-500">{raffle.slug}</div>
                   <dl className="mt-2 grid grid-cols-[max-content_1fr] gap-x-6 gap-y-1 text-sm">
                     <dt className="text-neutral-500">Send this asset</dt>
                     <dd className="figure break-all">{raffle.prizeAsset}</dd>

@@ -6,6 +6,10 @@ import { solanaRpcUrls } from "../../../lib/payments/config";
 import { BuyTickets } from "../../../components/BuyTickets";
 import { BuyTicketsRobinhood } from "../../../components/BuyTicketsRobinhood";
 import { chainIdFor, robinhoodNetwork } from "../../../lib/chain/robinhood/network";
+import { assetDisplay } from "../../../lib/chain/asset-display";
+import { AssetImage } from "../../../components/AssetImage";
+import { Countdown } from "../../../components/Countdown";
+import { utcInstant } from "../../../lib/countdown";
 import { advanceRaffle, raffleBySlug } from "../../../lib/raffles/lifecycle";
 import { payoutSplit } from "../../../lib/raffles/payout";
 import { ticketsSold } from "../../../lib/raffles/tickets";
@@ -39,6 +43,9 @@ export default async function RafflePage({ params }: PageProps<"/r/[slug]">) {
   // One classification per render, and only for the chain that needs it. A
   // Solana raffle must not pay for an EVM round trip.
   const robinhoodNet = raffle.chain === "robinhood" ? await robinhoodNetwork() : "unknown";
+  // The raffle is titled by WHAT IS BEING RAFFLED. The slug lives in the URL and
+  // nowhere else (`docs/design-state-2026-08-31.md` §3).
+  const asset = await assetDisplay(raffle.chain, raffle.prizeAsset);
 
   return (
     <main className="mx-auto w-full max-w-2xl px-6 py-16">
@@ -46,13 +53,28 @@ export default async function RafflePage({ params }: PageProps<"/r/[slug]">) {
         All raffles
       </Link>
 
-      <h1 className="mt-6 text-2xl font-semibold tracking-tight">{raffle.slug}</h1>
+      <div className="mt-6 flex flex-wrap items-start gap-6">
+        <AssetImage src={asset.imageUrl} name={asset.name} className="h-32 w-32 shrink-0" />
+        <div className="min-w-0 flex-1">
+          <h1 className="text-2xl font-semibold tracking-tight">{asset.name}</h1>
 
-      {/* The status is a word in the document, not a colour and not a timer
-          reaching zero (DESIGN.md §9). */}
-      <p className="mt-1 text-neutral-600">
-        This raffle is <strong>{raffle.status}</strong>.
-      </p>
+          {/* The status is a word in the document, not a colour and not a timer
+              reaching zero (DESIGN.md §9). */}
+          <p className="mt-1 text-neutral-600">
+            This raffle is <strong>{raffle.status}</strong>.
+          </p>
+
+          {raffle.status === "open" && (
+            <p className="mt-3">
+              <Countdown
+                targetMs={raffle.endsAt.getTime()}
+                label="Closes in"
+                elapsedLabel="Closed — waiting for the draw"
+              />
+            </p>
+          )}
+        </div>
+      </div>
 
       {raffle.status === "cancelled" && (
         <p className="mt-4 rounded border border-neutral-300 bg-neutral-50 p-4">
@@ -64,7 +86,9 @@ export default async function RafflePage({ params }: PageProps<"/r/[slug]">) {
 
       <dl className="mt-8 grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm">
         <dt className="text-neutral-500">Prize</dt>
-        <dd className="figure break-all">{chain.parseAsset(raffle.prizeAsset)?.display ?? raffle.prizeAsset}</dd>
+        {/* The name is the heading; this is the chain-native reference, which is
+            what somebody looking it up in an explorer needs. */}
+        <dd className="figure break-all">{asset.reference}</dd>
 
         <dt className="text-neutral-500">Ticket price</dt>
         <dd className="figure">
@@ -79,7 +103,9 @@ export default async function RafflePage({ params }: PageProps<"/r/[slug]">) {
         </dd>
 
         <dt className="text-neutral-500">Closes</dt>
-        <dd className="figure">{raffle.endsAt.toISOString()}</dd>
+        {/* Seconds, no milliseconds. The countdown above is for deciding; this
+            is for checking, and both are on the page deliberately. */}
+        <dd className="figure">{utcInstant(raffle.endsAt)}</dd>
 
         <dt className="text-neutral-500">Seller</dt>
         <dd className="figure break-all">{raffle.sellerWallet}</dd>
@@ -94,7 +120,17 @@ export default async function RafflePage({ params }: PageProps<"/r/[slug]">) {
           <dd className="figure break-all">{raffle.seedHash}</dd>
 
           <dt className="text-neutral-500">Entropy anchored to</dt>
-          <dd className="figure">{raffle.drawAt.toISOString()}</dd>
+          <dd>
+            {raffle.status === "closed" ? (
+              <Countdown
+                targetMs={raffle.drawAt.getTime()}
+                label="drawable in"
+                elapsedLabel="the anchor has passed — the draw can run"
+              />
+            ) : (
+              <span className="figure">{utcInstant(raffle.drawAt)}</span>
+            )}
+          </dd>
 
           {raffle.winnerWallet && (
             <>
