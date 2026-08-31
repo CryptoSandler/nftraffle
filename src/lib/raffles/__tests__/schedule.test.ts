@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { checkSellerChoices, drawAnchorFor, SELLER_LIMITS } from "../schedule";
+import {
+  checkSellerChoices,
+  drawAnchorFor,
+  MAX_TICKET_PRICE_NATIVE,
+  SELLER_LIMITS,
+} from "../schedule";
 
 /**
  * The seller's ceilings, and the anchor their close implies.
@@ -18,7 +23,13 @@ import { checkSellerChoices, drawAnchorFor, SELLER_LIMITS } from "../schedule";
 const NOW = Date.parse("2026-08-28T12:00:00Z");
 
 describe("checkSellerChoices", () => {
-  const base = { ticketPriceNative: 100_000_000n, maxTickets: 100, durationMinutes: 1_440, nowMs: NOW };
+  const base = {
+    ticketPriceNative: 100_000_000n,
+    maxTickets: 100,
+    durationMinutes: 1_440,
+    nowMs: NOW,
+    chain: "solana" as const,
+  };
 
   it("accepts an ordinary raffle and returns its close time", () => {
     const result = checkSellerChoices(base);
@@ -33,13 +44,50 @@ describe("checkSellerChoices", () => {
     });
   });
 
-  it("refuses a price above the ceiling", () => {
+  it("refuses a price above the ceiling, per chain", () => {
     expect(
       checkSellerChoices({
         ...base,
-        ticketPriceNative: SELLER_LIMITS.maxTicketPriceNative + 1n,
+        ticketPriceNative: MAX_TICKET_PRICE_NATIVE.solana + 1n,
       }),
     ).toMatchObject({ ok: false, reason: "price_too_high" });
+  });
+
+  it("applies each chain's OWN ceiling, which is the whole point of splitting it", () => {
+    /**
+     * The shared ceiling was 10,000,000,000 — ten SOL in lamports, and at the
+     * same time ten billionths of an ETH in wei. As a Robinhood limit it was not
+     * merely the wrong magnitude: no real raffle could ever have exceeded it, so
+     * it was no limit at all (docs/decisions.md Q13).
+     *
+     * Asserted in both directions, because a single-chain check would pass
+     * against a ceiling that was still shared.
+     */
+    // A price that is fine on Robinhood and far over Solana's ceiling.
+    const bigOnSolana = MAX_TICKET_PRICE_NATIVE.solana + 1n;
+    expect(checkSellerChoices({ ...base, ticketPriceNative: bigOnSolana })).toMatchObject({
+      ok: false,
+      reason: "price_too_high",
+    });
+    expect(
+      checkSellerChoices({ ...base, chain: "robinhood", ticketPriceNative: bigOnSolana }),
+    ).toMatchObject({ ok: true });
+
+    // And Robinhood's own ceiling still bites, so it is a ceiling rather than
+    // an absent check.
+    expect(
+      checkSellerChoices({
+        ...base,
+        chain: "robinhood",
+        ticketPriceNative: MAX_TICKET_PRICE_NATIVE.robinhood + 1n,
+      }),
+    ).toMatchObject({ ok: false, reason: "price_too_high" });
+  });
+
+  it("the two ceilings are not the same number", () => {
+    // The regression this guards: somebody "tidying" the record back into one
+    // shared value would pass every other test in this file.
+    expect(MAX_TICKET_PRICE_NATIVE.solana).not.toBe(MAX_TICKET_PRICE_NATIVE.robinhood);
   });
 
   it("refuses more tickets than the verification page can list", () => {

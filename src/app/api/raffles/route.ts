@@ -98,6 +98,10 @@ export async function POST(request: Request): Promise<Response> {
     maxTickets,
     durationMinutes,
     nowMs,
+    // From the request's validated chain, which is also the chain the price was
+    // parsed in. Ten SOL and half an ETH are different ceilings for the same
+    // reason they are different prices (docs/decisions.md Q13).
+    chain: chainParam,
   });
   if (!choices.ok) {
     return json({ error: choices.message, reason: choices.reason }, { status: 400, headers: NO_STORE });

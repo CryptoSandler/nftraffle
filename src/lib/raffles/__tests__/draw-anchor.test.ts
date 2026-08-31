@@ -98,6 +98,7 @@ describe("the anchor is after the close for every duration a seller can pick", (
   it("holds at the maximum duration a seller may choose", async () => {
     const result = checkSellerChoices({
       ticketPriceNative: 1_000_000n,
+      chain: "solana" as const,
       maxTickets: 10,
       durationMinutes: SELLER_LIMITS.maxDurationDays * 24 * 60,
       nowMs: NOW,
@@ -118,6 +119,7 @@ describe("the anchor is after the close for every duration a seller can pick", (
       (durationMinutes) => {
         const result = checkSellerChoices({
           ticketPriceNative: 1_000_000n,
+          chain: "solana" as const,
           maxTickets: 10,
           durationMinutes,
           nowMs: NOW,
@@ -134,6 +136,7 @@ describe("the anchor is after the close for every duration a seller can pick", (
     // relative to the sale, and where an operator is most tempted to shorten it.
     const result = checkSellerChoices({
       ticketPriceNative: 1_000_000n,
+      chain: "solana" as const,
       maxTickets: 10,
       durationMinutes: SELLER_LIMITS.minDurationMinutes,
       nowMs: NOW,
@@ -146,6 +149,7 @@ describe("the anchor is after the close for every duration a seller can pick", (
   it("agrees with drawAnchorFor, so there is one definition and not two", async () => {
     const result = checkSellerChoices({
       ticketPriceNative: 1_000_000n,
+      chain: "solana" as const,
       maxTickets: 10,
       durationMinutes: 90,
       nowMs: NOW,

@@ -362,6 +362,17 @@ places rather than one: the `// ponytail` comment at the constant, the
 **Trigger:** opening the Robinhood surface. It is item 1 on that checklist and
 the surface should not open with it outstanding.
 
+**Done, 2026-08-31**, in the batch that opened the chain. `MAX_TICKET_PRICE_NATIVE`
+in `raffles/schedule.ts` is now a record keyed by chain: **10 SOL** and
+**0.5 ETH**. The Robinhood figure is deliberately lower in fiat terms — ETH's
+unit is worth far more, so a slipped decimal costs far more, and this is the
+chain about to meet an audience that has never used this product.
+
+`checkSellerChoices` now REQUIRES a chain argument rather than defaulting to
+one. That is what turned the split from a value somebody must remember into a
+compile error at every call site, which is the only version of "remember this"
+that works.
+
 ## Q6 (restated) — `SUPPORT_CONTACT` stays empty until the domain
 
 Reaffirmed unchanged: the `support@`-on-our-own-domain convention, left empty

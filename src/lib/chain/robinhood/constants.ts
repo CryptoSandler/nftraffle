@@ -37,22 +37,50 @@ export const ROBINHOOD_BLOCKTIME_SKEW_SECONDS = 120;
  *
  * **MEASURED, NOT ASSUMED, AND THE DIFFERENCE MATTERED.** Third parties quote
  * ~250ms for Arbitrum Nitro chains. Measured against
- * `https://rpc.mainnet.chain.robinhood.com` on 2026-08-31 at head block
- * 50,960,711, the real figure is ~2.5× faster:
+ * `https://rpc.mainnet.chain.robinhood.com`, the real figure is ~2.5x faster.
+ *
+ * **Re-measured 2026-08-31 at head block 51,231,727**, before opening the chain:
  *
  *     span (blocks)   elapsed s   s/block
- *             1,000         101    0.1010
- *            10,000       1,016    0.1016
- *           100,000      10,078    0.1008
- *         1,000,000     101,053    0.1011
- *         5,000,000     504,818    0.1010
+ *             1,000          98    0.0980
+ *            10,000       1,013    0.1013
+ *           100,000      10,122    0.1012
+ *         1,000,000     101,059    0.1011
+ *         5,000,000     504,964    0.1010
  *
- * ≈0.101 s/block, ≈35,600 blocks/hour, stable to 1.01× across every span — the
- * widest covering about 5.8 days of history.
+ * ≈0.101 s/block, unchanged from the first measurement, stable to 1.03x across
+ * every span — the widest covering about 5.8 days of history.
  *
  * A first attempt sampling 40 consecutive blocks was discarded: four seconds of
  * span against one-second timestamp resolution measures the resolution, not the
  * chain. A rate needs a duration, not an instant.
+ *
+ * **THE CONTROL THAT MATTERS MOST IS NOT THE RATE.** Every figure above is the
+ * chain describing itself: block numbers divided by the chain's own timestamps.
+ * A chain whose clock ran fast would produce exactly these numbers and still be
+ * wrong about when a block happened, which is the assumption the draw anchor
+ * rests on (docs/decisions.md Q14).
+ *
+ * So it was also measured against an OUTSIDE clock. Two samples 150 seconds of
+ * real time apart, on 2026-08-31:
+ *
+ *     blocks produced        1,497
+ *     chain clock elapsed    151 s  -> 0.1009 s/block
+ *     local clock elapsed    151 s  -> 0.1009 s/block
+ *     drift over the window  0 s
+ *     constant offset        chain timestamps run ~2 s BEHIND real time
+ *
+ * The chain's clock tracks real time, and the ~2 s lag is a constant offset
+ * rather than a drift. Both matter to the anchor: a drift would accumulate over
+ * a long raffle, and a 2-second offset is three orders of magnitude inside the
+ * ten-minute margin.
+ *
+ * **Blockscout was NOT the cross-check, and that is a gap.** The intended
+ * second source was `robinhoodchain.blockscout.com`, which answers `403` with a
+ * Cloudflare bot challenge to any command-line request — so it could not be
+ * read, and no result from it is claimed here. The local-clock comparison above
+ * was used instead, and it is the stronger control of the two: Blockscout reads
+ * the same chain, while a wall clock does not.
  */
 export const ROBINHOOD_BLOCK_MS = 101;
 

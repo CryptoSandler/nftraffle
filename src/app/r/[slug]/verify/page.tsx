@@ -107,6 +107,33 @@ export default async function VerifyPage({ params }: PageProps<"/r/[slug]/verify
           not be known by us; and none can exist before the sale closes, so it cannot be known by a
           buyer either.
         </p>
+        {raffle.chain === "robinhood" && (
+          /*
+           * THE NARROWER CLAIM, SAID HERE AND NOT ONLY IN THE CAVEATS BELOW
+           * (docs/decisions.md Q7, and Q17 on why it moved up).
+           *
+           * It was already at the bottom of this page, under "what this does
+           * not prove", which was the right place while Solana was the chain
+           * people met first. Robinhood is now the chain people meet first, so
+           * the limit belongs where somebody reads how the draw works — not
+           * several screens below it, after they have decided to trust it.
+           *
+           * The sentence is deliberately about WHO, because that is the whole
+           * difference. On Solana a future slot's hash is unknowable to
+           * everyone. Here it is unknowable to us, which is what makes bias by
+           * us impossible, and not provably unknowable to the party that orders
+           * the blocks.
+           */
+          <p className="mt-3 rounded border border-neutral-300 bg-neutral-50 p-3 text-neutral-700">
+            <strong>One thing to be clear about on this chain.</strong> Robinhood Chain orders its
+            blocks through a single sequencer. So &ldquo;the hash could not be known in
+            advance&rdquo; is a statement about <em>us</em>: we commit to the seed before that
+            block exists, and we cannot influence which hash it gets. It is not a proof about the
+            sequencer, which is the party deciding the order. On Solana no one can know a future
+            slot&apos;s hash; here, we cannot, and that is a smaller claim. It is stated rather than
+            left for you to work out.
+          </p>
+        )}
         <p className="mt-3 text-neutral-700">
           It is an instant rather than a block number deliberately. A block number has to be
           predicted from how fast the chain is running, and that prediction is wrong by however much

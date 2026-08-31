@@ -1,3 +1,5 @@
+import type { ChainId } from "../chain/adapter";
+
 /**
  * What a seller may choose, and when their raffle's entropy is anchored.
  *
@@ -69,22 +71,39 @@ export function drawAnchorFor(endsAt: Date): Date {
   return new Date(endsAt.getTime() + DRAW_ANCHOR_DELAY_MS);
 }
 
+/**
+ * The most a ticket may cost, PER CHAIN, in that chain's smallest unit.
+ *
+ * **This was one shared number and the door for splitting it has now opened**
+ * (docs/decisions.md Q13: shared until the Robinhood surface opens, split the
+ * day it does). Q17 opened it, so this is that split.
+ *
+ * The shared value was 10,000,000,000 — ten SOL in lamports, and simultaneously
+ * ten BILLIONTHS of an ETH in wei. As a Robinhood ceiling it was not merely the
+ * wrong magnitude, it was a ceiling no real raffle could ever exceed, which is
+ * the same thing as no ceiling at all.
+ *
+ * **Why a ceiling exists.** Not to price the market: a mis-typed price is a
+ * raffle nobody can enter, and the seller does not find out until it closes
+ * empty. It is a typo guard, so each chain's value is set where a plausible
+ * ticket stops and a slipped decimal point begins.
+ *
+ * - Solana: **10 SOL**. Unchanged.
+ * - Robinhood: **0.5 ETH**. Lower in fiat terms than Solana's on purpose —
+ *   ETH's unit is worth far more, an extra zero costs far more, and this chain
+ *   is the one about to meet an audience that has never used this product.
+ *
+ * // ponytail: two constants; if a third chain arrives, this wants a table
+ * // keyed by ChainId rather than another entry bolted on.
+ */
+export const MAX_TICKET_PRICE_NATIVE: Record<ChainId, bigint> = {
+  /** 10 SOL, in lamports. */
+  solana: 10_000_000_000n,
+  /** 0.5 ETH, in wei. */
+  robinhood: 500_000_000_000_000_000n,
+};
+
 export const SELLER_LIMITS = {
-  /**
-   * Ten SOL, expressed in that chain's smallest unit by the caller.
-   *
-   * **A per-chain ceiling would be better and is deliberately not built yet**:
-   * ten SOL and ten ETH are wildly different sums, so this bound is meaningful
-   * on Solana and nearly meaningless on an EVM chain. The Robinhood surface is
-   * closed, so nothing can hit it yet.
-   * **The owner's decision (docs/decisions.md Q13): shared now, split per chain
-   * the day the Robinhood surface opens, not before.** Nothing can reach the
-   * wrong value in the meantime, because Robinhood has no configuration on any
-   * live deployment yet (docs/decisions.md Q17).
-   * // ponytail: single ceiling; make it per-chain as item 1 of the
-   * // "Opening the second chain" checklist in docs/operations.md.
-   */
-  maxTicketPriceNative: 10_000_000_000n,
   maxTickets: 10_000,
   minDurationMinutes: 15,
   maxDurationDays: 30,
@@ -115,11 +134,13 @@ export function checkSellerChoices(input: {
   maxTickets: number;
   durationMinutes: number;
   nowMs: number;
+  /** Which chain's ceiling applies. Required: there is no shared one any more. */
+  chain: ChainId;
 }): ChoiceResult {
   if (input.ticketPriceNative <= 0n) {
     return { ok: false, reason: "price_too_low", message: "A ticket has to cost something." };
   }
-  if (input.ticketPriceNative > SELLER_LIMITS.maxTicketPriceNative) {
+  if (input.ticketPriceNative > MAX_TICKET_PRICE_NATIVE[input.chain]) {
     return {
       ok: false,
       reason: "price_too_high",
