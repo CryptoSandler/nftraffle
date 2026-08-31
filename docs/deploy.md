@@ -132,12 +132,38 @@ header. **It is not available on this plan**: `POST /v1/projects/…/protection-
 answers `404`, and the field is rejected on the project PATCH.
 
 **Do not turn `ssoProtection` off to work around this.** Previews would become
-publicly reachable, and this is a pre-launch project. The options, in order:
+publicly reachable, and this is a pre-launch project.
+
+**So the devnet rehearsal runs locally, by design, until the plan has Protection
+Bypass for Automation.** That is option 3 below, and it is not a compromise worth
+apologising for: the local server runs the same production build, against the
+same Neon `preview` branch, the same Helius devnet RPC and the same devnet
+wallets that Vercel Preview holds. What it does not exercise is Vercel's edge —
+the CDN, the platform headers and `x-vercel-forwarded-for` — and nothing the
+rehearsal checks depends on those.
+
+```bash
+# .env.rehearsal mirrors the Vercel Preview environment exactly.
+# VERCEL_ENV=preview is what makes paymentSafety admit devnet.
+set -a; . /tmp/rehearsal.env.sh; set +a
+npm run build && npm run start
+```
+
+Two traps, both hit while doing this:
+
+- **`.env.local` wins over a shell export for `next start`.** Park it for the
+  run and restore it after, or the server comes up on production's database with
+  no money variables and every surface reads "not open" — which looks exactly
+  like a configuration bug in the rehearsal env.
+- **Kill the old server by PID, not by pattern.** A leftover process holding
+  `:3000` makes the new one fail with `EADDRINUSE` while `curl` happily answers
+  from the old one. `lsof -ti :3000` and kill those.
+
+The options, in order:
 
 1. Enable Protection Bypass for Automation in the dashboard, if the plan allows.
 2. Run preview checks from a browser session that is signed in.
-3. Verify against a local server pointed at the Neon `preview` branch, which
-   tests everything except Vercel's own edge.
+3. **Current approach** — the local mirror described above.
 
 🧑 **Root Directory:** repository root. **No `vercel.json` is needed** — this
 project has no crons, unlike pixelwar.
