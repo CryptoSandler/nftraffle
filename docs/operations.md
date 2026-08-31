@@ -106,15 +106,62 @@ cannot volunteer that work.
 Refunds are done by hand either way, from a wallet this codebase cannot reach.
 There is no automated refund and no copy anywhere implies there is one.
 
-## The two wallets are separate, and both are exclusive to this project
+## Shared payment wallet — the owner's open decision, and what it would need
 
-`PAYMENT_WALLET` receives fees and ticket money. `ESCROW_WALLET` holds prizes.
+**`ESCROW_WALLET_SOLANA` is new and exclusive. That is not open for discussion**
+— it holds other people's property, and sharing it makes "what do we owe whom"
+unanswerable.
 
-**They must be two different wallets, and neither may be a wallet another
-project uses.** Fees are ours; escrowed assets are not. Keeping them in one
-wallet makes "what do we actually owe people right now" unanswerable at exactly
-the moment somebody asks it — and sharing a receiving wallet across projects
-means two independent verifiers looking at the same transfers.
+**`PAYMENT_WALLET_SOLANA` is the open one.** If it ends up being the same address
+that already collects for bidoor and pixelwar, nothing about *this* project
+breaks: every ticket is matched to its order by signature, amount, destination,
+window and payer, and `consumed_signatures` is a primary key. A raffle settles
+correctly whatever else pays into that wallet.
+
+**What breaks is reconciliation, in the other direction.** A wallet-level view —
+"what arrived today and what was it for" — cannot tell an nftraffle ticket from a
+bidoor bid or a pixelwar registration. All three are native SOL transfers of an
+arbitrary amount to one address. Any pass that walks the wallet's history has to
+attribute each transfer to a project, and today nothing on the transfer says
+which.
+
+**What it would take, if the owner decides to share the wallet:** a marker on the
+ticket transfer that is ours and that survives on chain. Two candidates:
+
+- **The Solana Pay reference key**, which this project already mints per order
+  and already stores in `ticket_orders.reference_pubkey`. It rides on the
+  transaction as a read-only account. A reconcile pass would query by reference,
+  and a transfer carrying no known reference is not ours. **This is the cheaper
+  option by a wide margin: the key exists, the column exists, and only the
+  browser's transfer-building and a reconcile query would be new.**
+- **A memo instruction** carrying a project tag. Simpler to eyeball in an
+  explorer, and worse in every other way: it is free-text that anybody can copy,
+  so it identifies nothing under adversarial conditions.
+
+**Not built, deliberately.** Building either before the decision would be
+building for a wallet layout that may not happen — and the reference-key path
+only pays off alongside a reconcile pass, which nothing needs yet.
+
+**What is true today, so nobody assumes otherwise:** the browser flow does not
+yet attach the reference (Batch C builds the transfer), and there is no reconcile
+pass at all. A shared wallet is safe to *use* now and awkward to *audit* later.
+
+**Trigger:** the owner deciding the wallet is shared. Then the reference-key path
+becomes prerequisite work before the first raffle, not after — a transfer that
+has already happened cannot be retagged.
+
+## The two wallets are separate
+
+`PAYMENT_WALLET_SOLANA` receives fees and ticket money. `ESCROW_WALLET_SOLANA`
+holds prizes.
+
+**They must be two different wallets.** Fees are ours; escrowed assets are not.
+Keeping them in one wallet makes "what do we actually owe people right now"
+unanswerable at exactly the moment somebody asks it.
+
+**The escrow wallet must additionally be new and exclusive to this project.**
+Whether the payment wallet is shared with bidoor or pixelwar is the owner's open
+decision — see the section above for what that would require.
 
 ## A payout is verified before it is recorded
 

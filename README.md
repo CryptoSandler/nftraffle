@@ -97,6 +97,9 @@ different questions and both stay.
 docs/superpowers/specs/   the design spec; §0 is the analysis round behind it
 docs/decisions.md         the owner's decisions, what each costs, when to revisit
 docs/operations.md        rules that live in configuration, not in the schema
+docs/devnet-rehearsal.md  run a whole raffle server-side on devnet, before money
+docs/deploy.md            Vercel + Neon checklist, env matrix, the triple noindex
+docs/first-raffle.md      pre-flight for the first raffle with real money
 DESIGN.md                 §1 and §8 are normative; §2–§7 are an unbuilt direction
 migrations/               numbered SQL, never edited once applied
 src/lib/raffles/          draw, lifecycle, tickets, escrow, payout
