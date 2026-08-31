@@ -43,10 +43,22 @@ export function decodeAbiString(hex: string): string | null {
   } catch {
     return null;
   }
-  // A URI longer than this is not a URI; the fetch layer caps at 2,048 anyway,
-  // and refusing here means never allocating on the contract's number.
   if (!Number.isSafeInteger(offset) || !Number.isSafeInteger(length)) return null;
-  if (length <= 0 || length > 4_096) return null;
+  /**
+   * Bounded, but generously, because a `tokenURI` is not always a URL.
+   *
+   * This was 4,096 on the assumption that it addresses a document somewhere
+   * else. A fully on-chain NFT returns the document ITSELF, as a `data:` URI
+   * several kilobytes long — ordinary on Robinhood Chain, and the same wrong
+   * assumption that made `metadata-fetch.ts` refuse them outright. The real
+   * token this was caught on decodes to just under 4,096, so the cap was one
+   * slightly larger token away from silently returning null.
+   *
+   * What protects against a contract's LYING length field is `end > body.length`
+   * below, which is exact. This is a policy cap on how large a document we will
+   * consider at all, and it now matches the fetch layer's.
+   */
+  if (length <= 0 || length > 128 * 1024) return null;
 
   const start = offset * 2 + 64;
   const end = start + length * 2;

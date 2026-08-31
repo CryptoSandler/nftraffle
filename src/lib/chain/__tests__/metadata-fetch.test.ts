@@ -152,3 +152,64 @@ describe("decodeAbiString — a contract's return value is not trusted either", 
     expect(decodeAbiString(bad)).toBeNull();
   });
 });
+
+describe("data: URIs — the on-chain NFT case", () => {
+  /**
+   * FOUND BY RUNNING THE ROBINHOOD TESTNET RUNBOOK against a real ERC-721.
+   *
+   * Fully on-chain NFTs are ordinary on that chain: `tokenURI` returns a
+   * `data:application/json;base64,…` blob several kilobytes long, carrying the
+   * name, the attributes and an inlined SVG. The first version of this module
+   * refused every one of them, because a 2,048-character cap written for a URL
+   * — a bound on an ADDRESS — was being applied to a document.
+   *
+   * Nothing about that was visible from a unit test: the fixtures were all
+   * https URLs, because that is what a URI looks like when you are imagining
+   * one.
+   */
+  const json = { name: "GMCards #1", image: "https://example.com/1.png" };
+  const b64 = `data:application/json;base64,${Buffer.from(JSON.stringify(json)).toString("base64")}`;
+
+  it("accepts a data: URI far longer than a URL may be", async () => {
+    const padded = { ...json, description: "x".repeat(6_000) };
+    const long = `data:application/json;base64,${Buffer.from(JSON.stringify(padded)).toString("base64")}`;
+    expect(long.length).toBeGreaterThan(2_048);
+    expect(resolveTokenUri(long)).toMatchObject({ ok: true });
+  });
+
+  it("still caps a URL at 2,048, which is what that bound was for", async () => {
+    expect(resolveTokenUri(`https://example.com/${"a".repeat(4_000)}`)).toMatchObject({
+      ok: false,
+      reason: "bad_uri",
+    });
+  });
+
+  it("decodes base64 and plain data URIs without touching the network", async () => {
+    const { fetchTokenMetadata } = await import("../metadata-fetch");
+    expect(await fetchTokenMetadata(b64)).toEqual({
+      ok: true,
+      metadata: { name: "GMCards #1", image: "https://example.com/1.png", collection: null },
+    });
+    const plain = `data:application/json,${encodeURIComponent(JSON.stringify(json))}`;
+    expect(await fetchTokenMetadata(plain)).toMatchObject({ ok: true });
+  });
+
+  it("REFUSES a data: URI whose decoded payload is over the cap", async () => {
+    const { readDataUri } = await import("../metadata-fetch");
+    const huge = `data:application/json;base64,${"A".repeat(400_000)}`;
+    expect(readDataUri(huge)).toEqual({ ok: false, reason: "too_large" });
+  });
+
+  it("REFUSES a data: URI that is not offering JSON", async () => {
+    const { readDataUri } = await import("../metadata-fetch");
+    expect(readDataUri("data:image/svg+xml;base64,PHN2Zy8+")).toEqual({ ok: false, reason: "not_json" });
+  });
+
+  it("drops an inline data: image rather than truncating it into a broken one", async () => {
+    // A 2,048-character slice of a 30KB SVG is a corrupt URI that renders as a
+    // broken image — worse than no image. Whether to render untrusted SVG at
+    // all is a separate question, so this takes the safe half now.
+    const doc = readMetadataDocument({ name: "On-chain", image: `data:image/svg+xml;base64,${"A".repeat(9_000)}` });
+    expect(doc).toEqual({ name: "On-chain", image: null, collection: null });
+  });
+});

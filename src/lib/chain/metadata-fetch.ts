@@ -140,7 +140,25 @@ export type MetadataResult =
  */
 export function resolveTokenUri(raw: string): { ok: true; url: string } | { ok: false; reason: MetadataRefusal } {
   const trimmed = raw.trim();
-  if (trimmed.length === 0 || trimmed.length > 2_048) return { ok: false, reason: "bad_uri" };
+  if (trimmed.length === 0) return { ok: false, reason: "bad_uri" };
+
+  /**
+   * `data:` IS THE DOCUMENT, so the length rule below does not apply to it.
+   *
+   * Found by running `docs/testnet-rehearsal-robinhood.md` against a real
+   * ERC-721 on Robinhood testnet: fully on-chain NFTs are ordinary there, and
+   * their `tokenURI` is a `data:application/json;base64,…` blob several
+   * kilobytes long carrying the name, the attributes and an inlined SVG. The
+   * 2,048-character cap was written for a URL — a bound on an ADDRESS — and it
+   * silently refused every one of them as `bad_uri`.
+   *
+   * A data URI is bounded by `MAX_BYTES` on its decoded payload instead, which
+   * is the same limit a fetched document gets. It touches no network at all,
+   * which makes it the safest of the three schemes rather than the most exotic.
+   */
+  if (trimmed.slice(0, 5).toLowerCase() === "data:") return { ok: true, url: trimmed };
+
+  if (trimmed.length > 2_048) return { ok: false, reason: "bad_uri" };
 
   // `ipfs://<cid>/path` is not a URL Node will parse usefully, so it is
   // rewritten before parsing rather than after.
@@ -158,7 +176,6 @@ export function resolveTokenUri(raw: string): { ok: true; url: string } | { ok: 
   }
 
   if (!ALLOWED_SCHEMES.has(url.protocol)) return { ok: false, reason: "scheme_not_allowed" };
-  if (url.protocol === "data:") return { ok: true, url: trimmed };
   if (isForbiddenHost(url.hostname)) return { ok: false, reason: "host_not_allowed" };
   // Credentials in a metadata URL are never legitimate and would be sent to the
   // host on our behalf.
@@ -179,14 +196,30 @@ export function resolveTokenUri(raw: string): { ok: true; url: string } | { ok: 
  * `image` is NOT fetched or validated as a URL here: it is handed to Next's
  * image pipeline, which only renders hosts listed in `next.config.ts`. One
  * allowlist, in the place that does the rendering.
+ *
+ * **AN INLINE `data:` IMAGE IS DROPPED, and that is a decision rather than an
+ * oversight.** Fully on-chain NFTs — the common kind on Robinhood testnet —
+ * inline their artwork as a `data:image/svg+xml;base64,…` blob. Two things are
+ * wrong with passing it through: the 2,048-character cap below would truncate
+ * it into a corrupt URI that renders as a broken image, which is worse than no
+ * image; and it is markup from an untrusted contract, so whether we render it
+ * at all is a question about our own pages, not about parsing.
+ *
+ * So the name, which is the useful part, now works for those tokens, and the
+ * image is null. Rendering untrusted SVG deserves its own round rather than
+ * arriving as a side effect of a runbook fix.
+ * // ponytail: data: images dropped; if on-chain art matters for the listing
+ * // pages, allow `data:image/*` under its own size cap and render it only
+ * // through <img>, never inlined into the document.
  */
 export function readMetadataDocument(value: unknown): TokenMetadata {
   const doc = (typeof value === "object" && value !== null ? value : {}) as Record<string, unknown>;
   const str = (v: unknown, max: number): string | null =>
     typeof v === "string" && v.trim().length > 0 ? v.trim().slice(0, max) : null;
+  const image = str(doc.image, 2_048);
   return {
     name: str(doc.name, 200),
-    image: str(doc.image, 2_048),
+    image: image && image.slice(0, 5).toLowerCase() === "data:" ? null : image,
     // ERC-721 has no collection field by convention; some contracts carry one.
     collection: str(doc.collection, 200),
   };
@@ -203,6 +236,20 @@ export function readMetadataDocument(value: unknown): TokenMetadata {
 export async function fetchTokenMetadata(rawUri: string): Promise<MetadataResult> {
   const resolved = resolveTokenUri(rawUri);
   if (!resolved.ok) return resolved;
+
+  // Decoded here rather than handed to `fetch`. A data URI has no host, no
+  // redirect and no timeout to reason about, so routing it through the network
+  // path would mean depending on the runtime's data: support to enforce bounds
+  // that this function can enforce exactly.
+  if (resolved.url.slice(0, 5).toLowerCase() === "data:") {
+    const decoded = readDataUri(resolved.url);
+    if (!decoded.ok) return decoded;
+    try {
+      return { ok: true, metadata: readMetadataDocument(JSON.parse(decoded.text)) };
+    } catch {
+      return { ok: false, reason: "not_json" };
+    }
+  }
 
   let response: Response;
   try {
@@ -236,6 +283,45 @@ export async function fetchTokenMetadata(rawUri: string): Promise<MetadataResult
     return { ok: true, metadata: readMetadataDocument(JSON.parse(text)) };
   } catch {
     return { ok: false, reason: "not_json" };
+  }
+}
+
+/**
+ * Decodes `data:[<mediatype>][;base64],<payload>`.
+ *
+ * **Only JSON media types are accepted.** A token whose `tokenURI` inlines an
+ * image or HTML is not offering metadata, and parsing it as JSON would fail
+ * anyway — refusing on the declared type says which of the two happened. An
+ * absent media type is allowed because plenty of contracts omit it, and the
+ * JSON parse is the real check either way.
+ *
+ * Bounded on the DECODED payload, so a base64 blob cannot expand past the same
+ * cap a fetched document gets.
+ */
+export function readDataUri(uri: string): { ok: true; text: string } | { ok: false; reason: MetadataRefusal } {
+  const comma = uri.indexOf(",");
+  if (comma < 0) return { ok: false, reason: "bad_uri" };
+
+  const header = uri.slice("data:".length, comma).toLowerCase();
+  const isBase64 = header.endsWith(";base64");
+  const mediaType = (isBase64 ? header.slice(0, -";base64".length) : header).split(";")[0];
+  if (mediaType.length > 0 && !mediaType.includes("json")) {
+    return { ok: false, reason: "not_json" };
+  }
+
+  const payload = uri.slice(comma + 1);
+  // Checked before decoding: base64 is 4 characters per 3 bytes, so this bounds
+  // the decoded size without allocating first.
+  if (payload.length > MAX_BYTES * 2) return { ok: false, reason: "too_large" };
+
+  try {
+    const text = isBase64
+      ? Buffer.from(payload, "base64").toString("utf8")
+      : decodeURIComponent(payload);
+    if (Buffer.byteLength(text, "utf8") > MAX_BYTES) return { ok: false, reason: "too_large" };
+    return { ok: true, text };
+  } catch {
+    return { ok: false, reason: "bad_uri" };
   }
 }
 
