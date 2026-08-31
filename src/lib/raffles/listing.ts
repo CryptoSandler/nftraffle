@@ -208,3 +208,31 @@ export async function collectionBySlug(slug: string): Promise<CollectionSummary 
   );
   return rows[0] ? toCollection(rows[0]) : null;
 }
+
+/**
+ * Raffles whose prize belongs to a collection we did NOT launch.
+ *
+ * The owner's answer to open question Q5: every collection gets a page, not
+ * only the ones launched here. A collection we launched has a row and its own
+ * numbers; one we did not has no row at all, so its page is assembled from DAS
+ * plus whatever raffles here happen to name it.
+ *
+ * **`collection_mint` is not a column** — `raffles.collection_id` points at our
+ * own `collections` table and is NULL for an outside asset. So the join is done
+ * the only way it can be: by asking DAS which collection each prize belongs to.
+ * That is a network call per prize, which is why this is bounded and why the
+ * caller caches nothing it did not read this request.
+ *
+ * WHO CALLS THIS: `/c/[mint]` — the outside-collection page.
+ */
+export async function rafflesByPrizeMints(mints: readonly string[]): Promise<RaffleSummary[]> {
+  if (mints.length === 0) return [];
+  const rows = await query<SummaryRow>(
+    `${SUMMARY_SELECT}
+      WHERE r.prize_mint = ANY($1::text[]) AND r.status <> 'draft'
+      ORDER BY (r.status = 'open') DESC, r.ends_at DESC
+      LIMIT 200`,
+    [mints.slice(0, 500)],
+  );
+  return rows.map(toSummary);
+}

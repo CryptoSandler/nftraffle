@@ -95,7 +95,7 @@ different questions and both stay.
 
 ```
 docs/superpowers/specs/   the design spec; §0 is the analysis round behind it
-docs/open-questions.md    decisions that are the owner's, and why they are open
+docs/decisions.md         the owner's decisions, what each costs, when to revisit
 docs/operations.md        rules that live in configuration, not in the schema
 DESIGN.md                 §1 and §8 are normative; §2–§7 are an unbuilt direction
 migrations/               numbered SQL, never edited once applied

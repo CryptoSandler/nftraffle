@@ -84,22 +84,27 @@ The mechanism is not the risk — a seller who did not do the arithmetic is. So
 the create screen shows what they receive at one ticket and at a sell-out, net
 of the house fee, at the moment they set price and supply.
 
-Whether sellers should be able to set an ENFORCED minimum is the owner's open
-decision and is not built. See `docs/open-questions.md` Q2: an enforced minimum
+**Decided: no enforced minimum** (`docs/decisions.md` Q2). An enforced minimum
 means an automatic refund path, and an automatic refund means the server moves
-money, which it cannot do because it holds no private key.
+money — which it cannot do, because it holds no private key. So "yes" was never
+a field on a form.
 
 ## Cancelling is the operator's, and refunds are manual
 
-Only `/admin` can cancel a raffle, and a cancellation must carry a reason
-because the public page shows it to people who bought tickets.
+A cancellation must always carry a reason, because the public page shows it to
+people who bought tickets.
 
-Refunding those tickets is done by hand, from a wallet this codebase cannot
-reach. There is no automated refund and no copy anywhere implies there is one.
+**A SELLER may cancel their own raffle, but only while zero tickets have sold**
+(`docs/decisions.md` Q3) — `cancelRaffleAsSeller`, via
+`POST /api/raffles/[slug]/cancel`. With nothing sold there is nobody with a
+claim, so the asset simply returns to escrow for an operator to hand back.
 
-Whether a SELLER may cancel their own raffle is open — `docs/open-questions.md`
-Q3. The transition already exists with the right guards, so granting it later is
-an authorisation change rather than a new mechanism.
+**An OPERATOR may cancel at any point before payout**, including with tickets
+sold, because refunding those is work the operator is signing up for. A seller
+cannot volunteer that work.
+
+Refunds are done by hand either way, from a wallet this codebase cannot reach.
+There is no automated refund and no copy anywhere implies there is one.
 
 ## The two wallets are separate, and both are exclusive to this project
 

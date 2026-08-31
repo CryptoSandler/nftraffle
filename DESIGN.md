@@ -135,10 +135,12 @@ an unmeasured one.
 Four prohibitions. These are not tone preferences.
 
 1. **Never promise legality.** No copy anywhere states, implies, or jokes that
-   raffles here are legal in the reader's jurisdiction. Whether to add a terms
-   page, an age affirmation or geo-blocking is the owner's open decision and is
-   recorded in `docs/open-questions.md`. Until they decide, the honest position
-   is silence, not reassurance.
+   raffles here are legal in the reader's jurisdiction. The owner has decided
+   against geo-blocking in code; the jurisdiction notice lives in terms they
+   write (`docs/decisions.md` Q1). The silence in the product is therefore a
+   decided silence, not an unexamined one — and it stays silence. Nothing in
+   this application acquires a sentence about legality because a terms page
+   exists elsewhere.
 2. **Never describe odds as anything but the mechanical ratio.** "You hold 4 of
    112 tickets sold." Not "great odds", not "your chances are looking good", not
    a percentage rounded in the buyer's favour.

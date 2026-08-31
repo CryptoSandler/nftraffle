@@ -125,8 +125,8 @@ it for them.** Three moves, in order:
    honest in both futures.
 2. **Build the mechanism that fits both.** The code should not need rewriting
    whichever way the policy lands.
-3. **Record the policy as the owner's open decision**, somewhere an operator
-   reads — `docs/open-questions.md`, not a commit message.
+3. **Record the policy as the owner's decision**, somewhere an operator
+   reads — `docs/decisions.md`, not a commit message.
 
 **The irreversible sentence gets written once, and only when it is asked for
 explicitly.**
@@ -135,7 +135,10 @@ This project has more of these than the sibling projects did, because it sells
 chance for money. Whether a raffle needs a minimum, whether any jurisdiction is
 refused, whether a seller may cancel — every one of those is a promise the
 moment it appears in copy, and none of them is a promise this repository is
-allowed to make on the owner's behalf. See `docs/open-questions.md`.
+allowed to make on the owner's behalf. The first six were put to the owner and
+answered on 2026-08-31 — `docs/decisions.md` records each answer with what it
+costs and what would make it worth revisiting. New ones go in that file's
+"Still open" section.
 
 # A verification that returns nothing needs a control
 

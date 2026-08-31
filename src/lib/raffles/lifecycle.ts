@@ -24,7 +24,8 @@ import { isUniqueViolation, queryOne, transaction, violatedConstraint } from "..
  * `POST /api/raffles/[slug]/publish` (after `raffles/escrow.ts` verifies both
  * signatures); `advanceRaffle` from every read of a raffle page and from the
  * admin queue; `recordDraw` from `POST /api/admin/raffles/[id]/draw`;
- * `recordPayout` and `cancelRaffle` from the admin payout queue.
+ * `recordPayout` and `cancelRaffle` from the admin payout queue;
+ * `cancelRaffleAsSeller` from `POST /api/raffles/[slug]/cancel`.
  *
  * NOTE ON `advanceRaffle`'s caller. It is driven by READS rather than by a
  * scheduled job, deliberately: this project has no cron, and a raffle whose
@@ -415,12 +416,17 @@ export async function recordPayout(
 
 // --- anything -> cancelled ---------------------------------------------------
 
-export type CancelResult =
-  | { ok: true; raffle: Raffle }
-  | { ok: false; reason: "not_found" | "already_paid" | "reason_required" };
+export type CancelFailure =
+  | "not_found"
+  | "already_paid"
+  | "reason_required"
+  | "not_seller"
+  | "tickets_sold";
+
+export type CancelResult = { ok: true; raffle: Raffle } | { ok: false; reason: CancelFailure };
 
 /**
- * Ends a raffle early, with a reason.
+ * Ends a raffle early, with a reason. **The operator's path.**
  *
  * **The reason is mandatory and this is not paperwork.** The public page shows
  * it, and the audience is people who paid for tickets in something that is now
@@ -429,20 +435,82 @@ export type CancelResult =
  *
  * `paid` is the one state it cannot reach from: the prize and the proceeds have
  * already moved, and marking that cancelled would leave a page claiming a
- * transfer did not happen when the chain says it did. Refunds are manual either
- * way — see `docs/open-questions.md` Q2 and Q3.
+ * transfer did not happen when the chain says it did.
+ *
+ * An operator MAY cancel a raffle with tickets sold, because refunding them is
+ * work the operator is signing up for. A seller cannot volunteer that work —
+ * see `cancelRaffleAsSeller`.
  */
 export async function cancelRaffle(id: string, reason: string): Promise<CancelResult> {
+  return cancel(id, reason, null);
+}
+
+/**
+ * **The seller's path**, and the owner's answer to open question Q3: a seller
+ * may withdraw their own raffle, but only while nobody has bought into it.
+ *
+ * The zero-ticket bound is what makes the permission safe to grant. Refunds are
+ * manual, performed by a human from a wallet this codebase cannot reach, so a
+ * seller who could cancel after tickets sold would be making a promise about
+ * somebody else's labour — ours — to people who have already paid. With the
+ * bound, the only thing a seller withdraws is an asset nobody has a claim on.
+ *
+ * Two entry points, two authorisations, ONE transition. Writing the seller's
+ * case as a second `UPDATE` somewhere else is exactly the bare-UPDATE-in-a-route
+ * that CLAUDE.md forbids, and it would be the copy that drifts.
+ */
+export async function cancelRaffleAsSeller(
+  id: string,
+  sellerWallet: string,
+  reason: string,
+): Promise<CancelResult> {
+  return cancel(id, reason, sellerWallet);
+}
+
+/**
+ * The one transition. `seller` non-null means the seller's bounds apply.
+ *
+ * **Inside a transaction with `FOR UPDATE` on the raffle**, and that is a
+ * correctness requirement rather than tidiness: `settleTicketOrder` takes the
+ * same lock before it allocates ticket numbers. Without it, a settlement
+ * committing between this function's ticket count and its UPDATE would leave a
+ * cancelled raffle holding a paid ticket — somebody's SOL spent on a raffle that
+ * had already been withdrawn, with nothing on the page to say so.
+ */
+async function cancel(
+  id: string,
+  reason: string,
+  seller: string | null,
+): Promise<CancelResult> {
   const trimmed = reason.trim();
   if (!trimmed) return { ok: false, reason: "reason_required" };
 
-  const row = await queryOne<RaffleRow>(
-    `UPDATE raffles
-        SET status = 'cancelled', cancelled_reason = $2
-      WHERE id = $1 AND status <> 'paid'
-      RETURNING ${COLUMNS}`,
-    [id, trimmed],
-  );
-  if (row) return { ok: true, raffle: toRaffle(row) };
-  return { ok: false, reason: (await raffleById(id)) ? "already_paid" : "not_found" };
+  return transaction(async (client) => {
+    const locked = await client.query<{ status: RaffleStatus; seller_wallet: string }>(
+      `SELECT status, seller_wallet FROM raffles WHERE id = $1 FOR UPDATE`,
+      [id],
+    );
+    if (locked.rowCount === 0) return { ok: false, reason: "not_found" };
+    if (locked.rows[0].status === "paid") return { ok: false, reason: "already_paid" };
+
+    if (seller !== null) {
+      if (locked.rows[0].seller_wallet !== seller) return { ok: false, reason: "not_seller" };
+
+      // Checked under the lock, so a settlement cannot commit between this and
+      // the UPDATE below.
+      const sold = await client.query<{ count: string }>(
+        `SELECT count(*) AS count FROM tickets WHERE raffle_id = $1`,
+        [id],
+      );
+      if (Number(sold.rows[0].count) > 0) return { ok: false, reason: "tickets_sold" };
+    }
+
+    const updated = await client.query<RaffleRow>(
+      `UPDATE raffles SET status = 'cancelled', cancelled_reason = $2
+        WHERE id = $1
+        RETURNING ${COLUMNS}`,
+      [id, trimmed],
+    );
+    return { ok: true, raffle: toRaffle(updated.rows[0]) };
+  });
 }

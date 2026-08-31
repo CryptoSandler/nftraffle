@@ -241,8 +241,11 @@ export function feeLamports(grossLamports: bigint, bps: number): bigint {
 /**
  * Where somebody whose payment did not match is told to go.
  *
- * `null` is a real answer — see `docs/open-questions.md` Q6. Copy that reads
- * this must degrade to "this has been recorded" rather than inventing a channel.
+ * The convention is a `support@` inbox on this project's own domain, the same
+ * one the sibling projects follow (`docs/decisions.md` Q6). `null` is a real
+ * answer and is the current state, because there is no domain yet — copy that
+ * reads this must degrade to "this has been recorded" rather than inventing a
+ * channel.
  */
 export function supportContact(): string | null {
   return process.env.SUPPORT_CONTACT?.trim() || null;

@@ -3,7 +3,7 @@
 **Date:** 2026-08-28
 **Prerequisite reading:** the spec at
 [`../specs/2026-08-28-nftraffle-design.md`](../specs/2026-08-28-nftraffle-design.md),
-then `CLAUDE.md`, then `docs/open-questions.md`.
+then `CLAUDE.md`, then `docs/decisions.md`.
 
 ## What is already built
 
@@ -38,26 +38,35 @@ Every task below inherits these. They are not repeated per task.
 
 The one flow that already has a complete server side and no client.
 
-### Task C1: wallet connection
+### Task C1: wallet connection — DISCOVERY IS DONE
 
-A `WalletProvider` over `@solana/wallet-adapter-react`, pointed at `/api/rpc`
-and nowhere else. The browser must never learn the upstream endpoint.
+`@solana/wallet-adapter-react` was dropped before anything depended on it. The
+Wallet Standard is read directly: `lib/wallet/solana-standard.ts` holds the pure
+filtering (which registered wallets can sign on this chain, and how) and
+`components/useSolanaWallets.ts` reads the live registry through
+`useSyncExternalStore`. Both are tested; the hook has no caller yet, which is
+task C2.
+
+What remains for C1 is the CONNECT call and holding the connected account — a
+few lines over `standard:connect`, not a provider library.
 
 **The cluster disclosure is not optional and is not cosmetic.** `lib/chain/cluster.ts`
 already holds `classifyEndpoints` and `paymentSafety`; the page classifies
 server-side and passes down the ANSWER, never the URL. `paymentSafety` returning
 `{ok: false}` disables signing and shows its message. An `unknown` cluster
-blocks — refusing to sign is the safe failure.
+blocks — refusing to sign is the safe failure. `useSolanaWallets` takes the
+chain as an argument for exactly this reason: a hook that read the endpoint
+itself would undo the disclosure from the other direction.
 
-**Who calls it:** `src/app/layout.tsx`.
+**Still to pick: how a transaction gets built.** `@solana/web3.js` went with the
+adapter — it was the other half of the audit noise, via `jayson` and `uuid`.
+`@solana/kit` is the successor and the likely choice; whatever is picked, check
+`npm audit` before committing to it, because staying at zero is the point of
+having removed the first tree.
 
-**A lazier alternative worth weighing first:** `@solana/wallet-adapter-react`
-pulls `@solana-mobile/wallet-adapter-mobile`, which pulls the whole of
-`react-native` and its metro toolchain — the source of every advisory
-`npm audit` currently reports. The Wallet Standard can be read directly with far
-less. The sibling project accepts the tree, which is why it is the default here;
-if the dependency weight matters, this is where to change it, once, before
-anything depends on the adapter's API.
+**What was given up, and it is a real gap:** the adapter's mobile deep-linking
+and its prebuilt modal. Mobile wallets implementing the Wallet Standard in their
+in-app browser still work; one reachable only by deep link does not.
 
 ### Task C2: the buy panel
 
@@ -102,8 +111,12 @@ Prize mint, ticket price, supply, duration. Validates against
 **The floor is shown at the moment the decision is made** (spec §0.6): what the
 seller receives if one ticket sells and at a sell-out, both net of
 `HOUSE_FEE_BPS`, computed with `payoutSplit` so the screen and the payout use
-one function. This is the whole of what was adopted instead of an enforced
-minimum — do not quietly add the minimum.
+one function. The owner has decided against an enforced minimum
+(`docs/decisions.md` Q2) — do not quietly add one.
+
+The seller's own view also needs a withdraw control, bounded to zero tickets
+sold, calling `POST /api/raffles/[slug]/cancel`. The transition and the route
+exist and are tested; only the UI is missing.
 
 ### Task D2: the deposit step
 

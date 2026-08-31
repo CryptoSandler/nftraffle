@@ -4,6 +4,7 @@ import { commitSeed, verifyCommitment } from "../draw";
 import {
   advanceRaffle,
   cancelRaffle,
+  cancelRaffleAsSeller,
   createDraft,
   openRaffle,
   raffleById,
@@ -445,5 +446,87 @@ describe("the schema refuses states the code should never write", () => {
     await expect(
       queryOne(`UPDATE raffles SET status = 'open' WHERE id = $1 RETURNING id`, [row.id]),
     ).rejects.toThrow(/raffles_open_is_escrowed/);
+  });
+});
+
+describe("cancelRaffleAsSeller", () => {
+  /**
+   * The owner's answer to open question Q3: a seller may withdraw their own
+   * raffle, but only while nobody has bought into it.
+   *
+   * The bound is what makes the permission safe to grant. Refunds are manual,
+   * from a wallet this codebase cannot reach, so a seller who could cancel
+   * after tickets sold would be making a promise about somebody else's labour —
+   * ours — to people who already paid.
+   */
+  it("lets a seller withdraw a raffle nobody has entered", async () => {
+    const row = await opened();
+    const result = await cancelRaffleAsSeller(row.id, SELLER, "changed my mind");
+    expect(result.ok).toBe(true);
+    expect((await raffleById(row.id))?.status).toBe("cancelled");
+  });
+
+  it("refuses once a single ticket has sold", async () => {
+    const row = await opened();
+    await sellTickets(row.id, 1);
+    expect(await cancelRaffleAsSeller(row.id, SELLER, "changed my mind")).toEqual({
+      ok: false,
+      reason: "tickets_sold",
+    });
+    expect((await raffleById(row.id))?.status).toBe("open");
+  });
+
+  it("refuses somebody who is not the seller", async () => {
+    // The seller wallet is the one the draft was created with and the one the
+    // escrow deposit had to come from. Anyone else cancelling would be
+    // withdrawing an asset they never deposited.
+    const row = await opened();
+    expect(await cancelRaffleAsSeller(row.id, OTHER_WALLET, "not mine")).toEqual({
+      ok: false,
+      reason: "not_seller",
+    });
+    expect((await raffleById(row.id))?.status).toBe("open");
+  });
+
+  it("can withdraw a draft, before anything was deposited", async () => {
+    const row = await draft();
+    expect((await cancelRaffleAsSeller(row.id, SELLER, "wrong asset")).ok).toBe(true);
+  });
+
+  it("still requires a reason", async () => {
+    const row = await opened();
+    expect(await cancelRaffleAsSeller(row.id, SELLER, "  ")).toEqual({
+      ok: false,
+      reason: "reason_required",
+    });
+  });
+
+  it("cannot touch a raffle that has already paid out", async () => {
+    const row = await opened({ endsAt: new Date(Date.now() - 60_000), maxTickets: 10 });
+    await sellTickets(row.id, 1);
+    await advanceRaffle(row.id);
+    await recordDraw(row.id, {
+      drawBlockhash: "EETubP5AKHgjPAhzPAFcb8BAY1hMH639CWCFTqi3teA9",
+      winnerWallet: OTHER_WALLET,
+      winningTicket: 1,
+    });
+    await recordPayout(row.id, { prizeSignature: "p", proceedsSignature: "q" });
+    // `already_paid` rather than `tickets_sold`. A paid raffle satisfies both
+    // conditions, so the order decides the message — and "this already paid
+    // out" tells the seller what actually happened, where "tickets were sold"
+    // would send them looking for a refund path that is not the issue.
+    expect(await cancelRaffleAsSeller(row.id, SELLER, "too late")).toEqual({
+      ok: false,
+      reason: "already_paid",
+    });
+  });
+
+  it("is not the operator's path — an operator may still cancel a sold raffle", async () => {
+    // Two entry points, two authorisations, one transition. The operator can
+    // cancel a raffle with tickets sold because refunding them is work the
+    // operator is signing up for; a seller cannot volunteer that work.
+    const row = await opened();
+    await sellTickets(row.id, 2);
+    expect((await cancelRaffle(row.id, "prize could not be verified")).ok).toBe(true);
   });
 });

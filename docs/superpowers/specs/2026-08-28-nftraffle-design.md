@@ -19,8 +19,8 @@ three arrows belongs to a different product.
 Read this alongside [`DESIGN.md`](../../../DESIGN.md) (aesthetic direction and its
 invariants), [`docs/operations.md`](../../operations.md) (rules that live in
 configuration, not in the schema) and
-[`docs/open-questions.md`](../../open-questions.md) (the owner's open decisions,
-which this document must not close on their behalf).
+[`docs/decisions.md`](../../decisions.md) (the owner's decisions — the six this
+document deliberately left open were answered on 2026-08-31).
 
 ---
 
@@ -28,8 +28,9 @@ which this document must not close on their behalf).
 
 The brief asked for a round of analysis before the spec: what to add, improve or
 cut, judged against the thesis, with cost. Ten items. The ones marked **ADOPTED**
-are built into this spec. The ones marked **QUESTION** would change scope, so
-they are recorded in `docs/open-questions.md` and are not built.
+are built into this spec. The ones marked **QUESTION** would change scope, so they were recorded as open
+and put to the owner; all six were answered on 2026-08-31 and the answers are in
+`docs/decisions.md`.
 
 ### 0.1 The platform mint fee is a guard, not an appended instruction — ADOPTED
 
@@ -199,8 +200,9 @@ tickets held to tickets sold, or uses the word "guaranteed". The public
 verification page is the product's honest defence and it is built in v1, not
 deferred.
 
-**What is not decided here.** Two things are the owner's, and both are recorded
-in `docs/open-questions.md` rather than built:
+**What was not decided here.** Two things were the owner's. Both have since
+been answered (`docs/decisions.md`): no geo-blocking, and no enforced minimum.
+They are recorded below as they were put:
 
 - **Q1. Should any jurisdiction be refused?** Geo-blocking, a terms page, an age
   affirmation. All of these are one-way promises the moment they appear, and all
