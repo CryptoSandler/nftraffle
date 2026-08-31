@@ -125,17 +125,6 @@ export async function POST(request: Request): Promise<Response> {
     return json({ error: "That asset is not held by this wallet." }, { status: 409, headers: NO_STORE });
   }
 
-  const height = await chain.currentHeight();
-  if (height === null) {
-    // Fails closed. A raffle whose announced height was guessed is a raffle
-    // whose commitment references a moment nobody can rely on.
-    console.error(`POST /api/raffles: could not read the current height on ${chainParam}.`);
-    return json(
-      { error: "That chain could not be reached just now. Try again in a moment." },
-      { status: 503, headers: NO_STORE },
-    );
-  }
-
   /**
    * THE SEED IS WRITTEN AND NEVER RETURNED.
    *
@@ -155,11 +144,19 @@ export async function POST(request: Request): Promise<Response> {
     ticketPriceNative: priceNative,
     maxTickets,
     houseFeeBps: fee.bps,
-    drawSlot: chain.announceHeight({
-      currentHeight: height,
-      nowMs,
-      endsAtMs: choices.endsAt.getTime(),
-    }),
+    /**
+     * An INSTANT, not a block number, and it needs no chain call to compute.
+     *
+     * The old line here asked the adapter to predict a height from the current
+     * one and an assumed slot rate. That prediction is what
+     * `docs/findings-2026-08-31-draw-margin.md` found to be wrong by the
+     * difference between the assumed rate and the real one — early, always, and
+     * for long raffles early enough to land before the sale closed.
+     *
+     * A time cannot drift. Which block it resolves to is decided at the draw by
+     * the chain (docs/decisions.md Q14).
+     */
+    drawAt: choices.drawAt,
     endsAt: choices.endsAt,
     seedHash,
     seedSecret: seed,
@@ -177,7 +174,7 @@ export async function POST(request: Request): Promise<Response> {
       slug: created.raffle.slug,
       chain: created.raffle.chain,
       seedHash: created.raffle.seedHash,
-      drawHeight: created.raffle.drawSlot.toString(),
+      drawAt: created.raffle.drawAt.toISOString(),
       endsAt: created.raffle.endsAt.toISOString(),
     },
     { status: 201, headers: NO_STORE },

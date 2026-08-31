@@ -29,7 +29,7 @@ const live = commitSeed();
 const openDraft = await createDraft({
   slug: "demo-open", chain: "solana", sellerWallet: A, prizeAsset: "MintOpen1111111111111111111111111111111111",
   collectionId: null, ticketPriceNative: 250_000_000n, maxTickets: 20, houseFeeBps: 500,
-  drawSlot: 999_000_001n, endsAt: new Date(Date.now() + 3 * 3600_000), seedHash: live.seedHash, seedSecret: live.seed,
+  drawAt: new Date(Date.now() + 70 * 60_000), endsAt: new Date(Date.now() + 3 * 3600_000), seedHash: live.seedHash, seedSecret: live.seed,
 });
 if (!openDraft.ok) throw new Error(openDraft.reason);
 const opened = await openRaffle(openDraft.raffle.id, { listingFeeSignature: "seedL1", escrowSignature: "seedE1" });
@@ -44,7 +44,7 @@ const done = commitSeed();
 const drawnDraft = await createDraft({
   slug: "demo-drawn", chain: "solana", sellerWallet: A, prizeAsset: "MintDrawn111111111111111111111111111111111",
   collectionId: null, ticketPriceNative: 100_000_000n, maxTickets: 5, houseFeeBps: 500,
-  drawSlot: 999_000_002n, endsAt: new Date(Date.now() + 3600_000), seedHash: done.seedHash, seedSecret: done.seed,
+  drawAt: new Date(Date.now() + 70 * 60_000), endsAt: new Date(Date.now() + 3600_000), seedHash: done.seedHash, seedSecret: done.seed,
 });
 if (!drawnDraft.ok) throw new Error(drawnDraft.reason);
 const opened2 = await openRaffle(drawnDraft.raffle.id, { listingFeeSignature: "seedL2", escrowSignature: "seedE2" });
@@ -63,7 +63,10 @@ const { winningTicket } = deriveWinner({
 });
 const winner = tickets.find((t) => t.number === winningTicket)!;
 const drew = await recordDraw(opened2.raffle.id, {
-  drawBlockhash: blockhash, winnerWallet: winner.wallet, winningTicket,
+  drawBlockhash: blockhash,
+  drawHeight: 1n,
+  drawBlockTimeMs: Date.now() + 4_800_000,
+  winnerWallet: winner.wallet, winningTicket,
 });
 if (!drew.ok) throw new Error(drew.reason);
 

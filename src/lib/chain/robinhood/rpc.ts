@@ -95,20 +95,26 @@ export async function currentBlockHeight(): Promise<bigint | null> {
 }
 
 /**
- * The hash of a block at `height`, or null when that height has no block yet.
+ * One block's hash and timestamp.
  *
- * Unlike Solana, an EVM chain does not skip heights — every number up to the
- * head has a block. So `null` here means "not reached yet" rather than
- * "skipped", and the caller's response differs accordingly: waiting is the
- * right answer, where on Solana a skipped slot means the raffle can never be
- * drawn against its announcement.
+ * Unlike Solana, an EVM chain has no holes: every height up to the head has a
+ * block. So `null` here means "not reached yet" rather than "skipped", and the
+ * anchor search handles both the same way — it keeps looking or reports that the
+ * anchor has not arrived.
+ *
+ * WHO CALLS THIS: `chain/robinhood/index.ts`, as `blockAt` and through the
+ * shared anchor search.
  */
-export async function blockHashAtHeight(height: bigint): Promise<string | null> {
+export async function blockAtHeight(
+  height: bigint,
+): Promise<{ hash: string; timeMs: number } | null> {
   try {
-    const block = (await evmCall("eth_getBlockByNumber", [`0x${height.toString(16)}`, false])) as
-      | { hash?: string }
-      | null;
-    return typeof block?.hash === "string" && block.hash.length > 0 ? block.hash : null;
+    const block = (await evmCall("eth_getBlockByNumber", [
+      `0x${height.toString(16)}`,
+      false,
+    ])) as { hash?: string; timestamp?: string } | null;
+    if (typeof block?.hash !== "string" || !block.timestamp) return null;
+    return { hash: block.hash, timeMs: Number(BigInt(block.timestamp)) * 1000 };
   } catch {
     return null;
   }

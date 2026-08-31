@@ -371,6 +371,181 @@ rather than inventing one.
 
 ---
 
+# The draw's entropy anchor — decided 2026-09-01
+
+## Q14 — Commit to a wall-clock instant, not a block height
+
+**Decided: a raffle publishes a TIME `draw_at`, and the draw uses the first block
+at or after it.** The announced-height design is removed, not patched.
+
+### The defect it replaces
+
+`docs/findings-2026-08-31-draw-margin.md`. The old design announced
+`currentSlot + (duration + 1h)/400ms` and argued the chain could only lag.
+Measured: mainnet runs at 317 ms/slot, devnet at 166. The chain runs FASTER than
+assumed, so the announced slot arrived early — and past roughly four hours of
+duration on mainnet, its hash existed while tickets were still on sale. The seed
+holder could then compute the winning ticket before the sale ended.
+
+**A smaller constant does not fix this.** Any slot-rate figure is a claim about
+the world that decays: it differs per cluster, drifts with load, and would have
+to be re-measured forever. The bug was not the number 400; it was expressing a
+*time* requirement in *height* units.
+
+### The mechanism
+
+At creation the raffle publishes `draw_at = ends_at + 10 minutes`, alongside
+`sha256(seed)`. At the draw, the server finds **the first block whose timestamp
+is at or after `draw_at`** and uses that block's hash:
+
+    material      = sha256(seedHash + seed + blockHash + raffleId)
+    winningTicket = (material as a big-endian integer mod ticketCount) + 1
+
+`draw_at` is a wall-clock instant, so no slot-rate assumption enters anywhere.
+
+**Why the entropy cannot be known early, by construction.** Tickets settle only
+while the raffle is `open`, which ends at `ends_at`. `draw_at` is strictly after
+`ends_at`, and a block at or after `draw_at` cannot exist before `draw_at`
+arrives. There is no arithmetic that can make the anchor land early, because
+there is no arithmetic — the chain's own clock decides.
+
+**Why 10 minutes and not zero.** A payment made just before `ends_at` may be
+confirmed a little after it, and our clock and the chain's are not the same
+clock. Ten minutes covers both with room, and — unlike the old hour — it is not
+load-bearing for safety, only for tidiness. Being wrong about it by a few minutes
+costs nothing.
+
+**What a third party checks, without trusting us.** `draw_at` is on the page.
+They ask any node for the first block at or after it, and compare the hash and
+the arithmetic. The old design asked them to trust that a slot number announced
+months earlier was the right one; this asks them to look up a timestamp.
+
+### Why the same seam serves both chains
+
+The search is `first block whose timestamp >= T`, which is a binary search over
+height. **The search itself is chain-agnostic and lives in one module**; each
+adapter supplies only `currentHeight()` and `blockAt(height)`. Solana's skipped
+slots become a `null` from `blockAt`, which the search steps over; EVM has no
+holes and the same code runs unchanged.
+
+That is the whole reason to prefer this over anything cleverer: Robinhood Chain
+had the identical defect, measured, and this removes it from both without a
+per-chain constant.
+
+### Alternatives considered and rejected
+
+**A conservative slot-rate constant** (assume the fastest plausible slot). Safe,
+and it makes the wait proportional to how wrong the estimate is — on mainnet at
+317 ms a one-hour margin becomes 2.6 hours, and a 30-day raffle's slot lands
+months out. Still a claim about the world.
+
+**Anchor on the block that closes the raffle.** Deterministic and immune to
+drift, but the hash exists at exactly the moment the sale ends, with no cushion
+for a late settlement. Strictly worse than the same idea plus a margin.
+
+**A VRF or drand beacon.** The strongest randomness available and rejected on
+the project's own terms: it is either an on-chain program of ours
+(SECURITY.md I2) or an external oracle the brief rules out, and it adds a
+liveness dependency that can stall a draw for reasons nobody here controls.
+
+**Derive entropy from the ticket set itself** — e.g. the last ticket's
+signature. Circular: whoever buys last chooses the entropy, which is worse than
+the operator knowing it.
+
+**Keep heights but re-measure per chain on a schedule.** Rejected as the shape of
+the original bug: a measurement taken once is a slot-rate assumption like any
+other, and this one had already been written down as measured for Robinhood while
+being wrong for Solana.
+
+### The rule is enforced three times, on purpose
+
+The anchor search cannot return a block before `draw_at`, and `draw_at` is after
+`ends_at`, so the attack is unreachable by construction. It is checked anyway, in
+three places, and the reason is in the finding this replaces: **the old design
+was also safe by construction, and the construction rested on a constant that
+turned out to be wrong.**
+
+1. `checkDrawAnchor` (`raffles/draw.ts`) — the draw route refuses a block that is
+   not strictly after the close, on the block's OWN timestamp rather than on the
+   arithmetic that selected it.
+2. `raffles_anchor_block_after_close` (migration 006) — the database will not
+   store such a draw, whatever wrote it: this route, a script, or a hand-written
+   `UPDATE`.
+3. `/r/[slug]/verify` re-runs the same rule from the published values, and tells
+   the reader how to confirm the block's timestamp against the chain directly.
+
+Migration 006 also adds `draw_block_time`, without which the verify page would
+have to ask the reader to take "the block came after the close" on trust — which
+is the one thing that page exists not to do.
+
+### What this does NOT remove, stated rather than glossed
+
+**The anchor is a chain-reported timestamp, not the real wall clock.** On Solana
+`blockTime` is a stake-weighted median of validator clocks; on an Arbitrum Orbit
+chain the sequencer sets it within consensus bounds. So the instant this design
+commits to is the chain's opinion of the time, not time itself.
+
+This is a real limitation and it is smaller than the one it replaces, which is
+the honest way to put it. To move the anchor early enough to matter, a party
+would have to push a block's timestamp back by minutes AND be the party ordering
+blocks AND hold the seed — and on Solana that means a majority of stake
+misreporting its clocks. The old defect needed none of that: it happened on its
+own, to every long raffle, because a division used the wrong number.
+
+It also bites the two chains unequally, which is why `/r/[slug]/verify` already
+carries a narrower text for Robinhood (Q7). A single sequencer that both orders
+blocks and stamps them is a stronger position than Solana's validator set, and
+the page says so rather than reusing the Solana wording.
+
+### What it costs
+
+- Two migrations (005, 006) and a change to the adapter interface.
+- The draw resolves a block by binary search — a handful of RPC reads instead of
+  one, once per raffle, on a path an operator already waits on.
+- `hashAtHeight` is replaced by `blockAt`, which is a smaller and more honest
+  primitive: it answers what the chain says, and says when.
+- Ten minutes of waiting after every close, paid by the honest case every time.
+  That is the price of the margin and it is the right place to pay it.
+
+**One defect found while building it, worth recording because the shape repeats.**
+The first search ran from height 0. Every synthetic test passed, because a
+synthetic chain answers for every height. A real node does not — it prunes old
+blocks, which read as `null`, and `null` means "skipped slot, look upward". In
+pruned history that reading is backwards: those heights are OLD. The search
+walked down into the pruned region and reported no block on a chain that had
+passed the anchor twenty minutes earlier. It now brackets back from the head, so
+it never asks about a height a node would not serve. Found by running
+`docs/devnet-rehearsal.md` against public devnet — the same way the defect this
+whole decision replaces was found, and the second time in this project that
+assuming a chain's behaviour cost more than measuring it.
+
+### Trigger to revisit
+
+A chain whose block timestamps are not monotonic, or not meaningful. Both
+supported chains enforce monotonic timestamps at consensus; a future chain that
+does not would need a different anchor and should not reuse this one silently.
+
+## Q15 — `maxDurationDays` returns to 30 only when a test covers it
+
+**Decided: the two-hour interim cap lifts when — and only when — the new
+mechanism has a test proving a long raffle's entropy is still unavailable at
+close.**
+
+The interim rule was a bridge for a design that could not be safe at long
+durations. Under Q14 duration is irrelevant to safety, because the anchor is
+`ends_at + 10 minutes` whatever `ends_at` is. The test that earns the ceiling
+back asserts exactly that: for a 30-day raffle, the resolved anchor is still
+after the close.
+
+**Earned, 2026-08-31.** `raffles/__tests__/draw-anchor.test.ts` covers it, and
+covers the stronger claim the ceiling actually depends on: the margin is
+*identical* at 15 minutes, 2 hours, 1 day, 7 days and 30 days. A test that only
+checked "30 days works" would pass under a design whose margin merely shrank
+slowly. Asserting the margin is a constant is what says the defect is gone rather
+than smaller. The interim two-hour rule is removed from `docs/operations.md`.
+
+---
+
 ## Still open
 
 Nothing from the twelve above. New questions go here as they arise, in the same

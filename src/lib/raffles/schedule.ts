@@ -1,15 +1,18 @@
 /**
- * What a seller may choose.
+ * What a seller may choose, and when their raffle's entropy is anchored.
  *
- * **The announced-height arithmetic used to live here and does not any more.**
- * It moved onto the chain adapters when the second chain arrived, because the
- * two chains disagree about the one thing that matters — which direction the
- * estimate is allowed to be wrong in. Solana can only lag; an EVM chain running
- * faster than measured would surface the announced hash while tickets are still
- * selling. Each adapter carries its own measurement and its own margin.
+ * **The height arithmetic that used to live here, then moved to the adapters,
+ * is gone entirely** — see `docs/decisions.md` Q14. Both versions predicted a
+ * block NUMBER from an assumed rate, and both were wrong in the same way: the
+ * measured rate is not the actual rate, so the predicted block landed early by
+ * whatever the error was. On mainnet that was 317 ms against an assumed 400,
+ * which surfaced the draw's entropy while tickets were still selling.
  *
- * What stayed is chain-neutral: these are product limits on a seller's
- * choices, and they are the same on every chain.
+ * What replaced it is in this file and is chain-neutral **because a wall-clock
+ * instant is chain-neutral**: the raffle commits to a TIME, and each chain's
+ * adapter resolves that time to whichever of its blocks came first at or after
+ * it. A chain running at any rate, drifting in any direction, resolves the same
+ * instant. There is no rate constant left to be wrong about.
  *
  * WHO CALLS THIS: `POST /api/raffles`, and nothing else.
  */
@@ -28,6 +31,44 @@
  * page lists every one, so past this the page stops being readable — which
  * defeats the only thing that page is for.
  */
+/**
+ * How long after the close the draw's entropy is anchored.
+ *
+ * **The single number the whole draw commitment rests on**, and what it has to
+ * buy is one thing: that no block eligible to decide this raffle can exist
+ * while a ticket can still be bought. Ten minutes does that with room to spare
+ * on both chains — Solana's clock is a stake-weighted median of validator
+ * timestamps and drifts from real time by seconds, not minutes, and Robinhood's
+ * proposer sets a timestamp bounded by the sequencer.
+ *
+ * **Why not longer.** Every minute here is a minute the seller and the winner
+ * wait after the sale ends, staring at a page that says the draw has not
+ * happened. That is the cost, it is paid by the honest case every time, and an
+ * hour would buy nothing the ten minutes does not.
+ *
+ * **Why not shorter.** Below a couple of minutes the margin starts to be the
+ * same order as the chain-clock drift it exists to absorb, and the failure it
+ * would allow is the one this whole redesign exists to remove.
+ *
+ * Unlike the old rate constants, being wrong about this is not silent: it is
+ * checked at the draw against the block's own timestamp (`checkDrawAnchor` in
+ * `raffles/draw.ts`), and a block that predates the close is REFUSED rather
+ * than used.
+ */
+export const DRAW_ANCHOR_DELAY_MS = 10 * 60_000;
+
+/**
+ * The instant a raffle's entropy is anchored to, from its close.
+ *
+ * One line, exported, and called by both the create route and the tests, so
+ * that "ten minutes after the close" has exactly one definition. The database
+ * independently refuses anything not after the close (`raffles_anchor_after_close`,
+ * migration 005).
+ */
+export function drawAnchorFor(endsAt: Date): Date {
+  return new Date(endsAt.getTime() + DRAW_ANCHOR_DELAY_MS);
+}
+
 export const SELLER_LIMITS = {
   /**
    * Ten SOL, expressed in that chain's smallest unit by the caller.
@@ -57,10 +98,17 @@ export type ChoiceFailure =
   | "duration_too_long";
 
 export type ChoiceResult =
-  | { ok: true; endsAt: Date }
+  | { ok: true; endsAt: Date; drawAt: Date }
   | { ok: false; reason: ChoiceFailure; message: string };
 
-/** Validates the seller's three numbers, and returns the close time they imply. */
+/**
+ * Validates the seller's three numbers, and returns the close and the anchor
+ * they imply.
+ *
+ * Both times come back together deliberately. They are one decision — a raffle
+ * whose close and anchor were computed by two different callers is a raffle
+ * where the gap between them is whatever those callers happened to agree on.
+ */
 export function checkSellerChoices(input: {
   ticketPriceNative: bigint;
   maxTickets: number;
@@ -102,5 +150,6 @@ export function checkSellerChoices(input: {
     };
   }
 
-  return { ok: true, endsAt: new Date(input.nowMs + input.durationMinutes * 60_000) };
+  const endsAt = new Date(input.nowMs + input.durationMinutes * 60_000);
+  return { ok: true, endsAt, drawAt: drawAnchorFor(endsAt) };
 }

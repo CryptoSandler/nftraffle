@@ -21,11 +21,16 @@ Everything is driven with `solana`, `mplx` and `curl`. **No browser is needed
 for any step**, which is the point: the whole server-side gate is reachable
 without Batch C existing.
 
-**BUDGET AT LEAST 90 MINUTES, and most of it is waiting.** The announced draw
-slot sits a full hour past the raffle's close by design (`SOLANA_DRAW_MARGIN_MS`),
-and the shortest raffle a seller may create is 15 minutes. So the floor is
-15 + 60 ≈ 75 minutes before the draw can run at all, plus setup. Everything up to
-the draw takes about ten minutes; then the clock does the work.
+**BUDGET ABOUT 45 MINUTES, and much of it is waiting.** The draw's entropy is
+anchored ten minutes past the raffle's close (`DRAW_ANCHOR_DELAY_MS`), and the
+shortest raffle a seller may create is 15 minutes. So the floor is 15 + 10 = 25
+minutes before the draw can run at all, plus setup. Everything up to the draw
+takes about ten minutes; then the clock does the work.
+
+**This used to be 90 minutes.** The old design put the draw an hour past the
+close because it needed a wide margin to absorb a slot-rate estimate that could
+be wrong. The estimate is gone (`docs/decisions.md` Q14), and so is most of the
+wait — the margin is now covering clock skew rather than arithmetic error.
 
 Two things follow. Start the raffle FIRST and run the escrow and ticket
 negatives while it runs — they use a second asset and do not touch it. And do
@@ -205,6 +210,20 @@ npm run db:migrate:test      # each target is named; there is no default
 cp .env.devnet .env.local && npm run dev
 ```
 
+> **`.env.local` beats a shell `export`.** Both `next dev` and `next start` load
+> it, and a variable exported in your shell does NOT override what is in the
+> file. Setting `DATABASE_URL` in the shell and leaving a different one in
+> `.env.local` gets you a server quietly talking to the other database — see
+> `docs/deploy.md`.
+
+> **THE `psql` LINES BELOW ASSUME A LOCAL POSTGRES.** They are written as
+> `docker exec nftraffle-pg psql …` because that is the cheapest way to run this.
+> If you point `DATABASE_URL` at a hosted branch instead — the Vercel preview
+> mirror in `.env.rehearsal`, say — those lines will not reach it. Run the same
+> SQL through any client that reads `DATABASE_URL`; what matters is that the
+> database you inspect is the one the server is using, which is the mistake
+> worth guarding against here.
+
 **`ALLOW_UNTRUSTED_CLIENT_IP=true` is required locally** and must never be set
 in production: without a trusted client address the rate limiter fails closed and
 every request is refused.
@@ -242,15 +261,18 @@ curl -s -X POST $API/api/raffles -H 'content-type: application/json' -d "{
 ```
 
 **Expect** `201` and a body with `slug`, `chain: "solana"`, `seedHash`,
-`drawHeight`, `endsAt`.
+`drawAt`, `endsAt`.
 
 **Watch for:**
 - `ticketPrice` is a **string**, not a number. Eighteen decimals do not survive a
   double, so the parser is a decimal-string parser on both chains.
 - `seedHash` is 64 hex characters. The seed itself is **not** in the response and
   must not be — it is in `seed_secret` and is published only at the draw.
-- `drawHeight` is roughly `currentSlot + 9000 × (duration + 1h in hours)`. It is
-  a slot that does not exist yet.
+- `drawAt` is exactly ten minutes after `endsAt`, and it is a **time**, not a
+  slot. Check the arithmetic yourself — it is the entire commitment. There is no
+  slot number in this response any more, and that absence is the fix: the old
+  `drawHeight` was predicted from an assumed slot rate, and the prediction landed
+  early by however much the rate was wrong (`docs/findings-2026-08-31-draw-margin.md`).
 
 ```bash
 SLUG=$(python3 -c "import json;print(json.load(open('/tmp/draft.json'))['slug'])")
@@ -322,9 +344,34 @@ nobody holds.
 
 ### Negative 3b — a deposit that predates the draft
 
-Deposit first, create the draft second, then publish. **Expect**
-`reason: "predates_draft"`. Without this, one historical deposit could publish
-raffle after raffle.
+**Not "deposit, then create the draft" — that sequence cannot be run**, and the
+reason is another control working: `POST /api/raffles` checks the seller holds
+the asset, so once it is in escrow no draft naming it can be created at all. The
+executable version quotes an OLD deposit receipt while a NEWER deposit really is
+sitting in escrow, which is also the more realistic attack — a seller reusing a
+receipt from a previous raffle rather than one from nowhere:
+
+```bash
+# 1. Deposit the asset (receipt A), then take it back out.
+mplx core asset transfer $ASSET $ESCROW         # note the signature -> RECEIPT_A
+mplx config set keypair escrow.json
+mplx core asset transfer $ASSET $SELLER
+mplx config set keypair seller.json
+
+# 2. More than 120 seconds later (the blocktime skew), create the draft and
+#    deposit again for real, so the asset IS in escrow.
+curl -s -X POST $API/api/raffles ...            # -> SLUG_3B
+mplx core asset transfer $ASSET $ESCROW
+
+# 3. Publish quoting RECEIPT_A rather than the deposit just made.
+curl -s -X POST $API/api/raffles/$SLUG_3B/publish -H 'content-type: application/json' \
+  -d "{\"listingFeeSignature\":\"$FEE\",\"escrowSignature\":\"$RECEIPT_A\"}"
+```
+
+**Expect** `409`, `reason: "predates_draft"`. Getting `not_in_escrow` instead
+means step 2's re-deposit did not land, and the check under test never ran —
+that is a re-run, not a pass. Without this check, one historical deposit could
+publish raffle after raffle.
 
 ### Negative 3c — the fee paid by somebody else
 
@@ -410,6 +457,20 @@ Send the SOL first, open the order second, then confirm. **Expect**
 `reason: "outside_window"`. Without it, any unspent historical transfer to the
 payment wallet is claimable by whoever quotes it first.
 
+> **LEAVE MORE THAN 120 SECONDS BETWEEN THE TRANSFER AND THE ORDER**, measured
+> against the wall clock rather than against how long the commands felt. The
+> window check allows `SOLANA_BLOCKTIME_SKEW_SECONDS` (120) either side, because
+> our clock and the cluster's are not the same clock. A transfer 90 seconds early
+> is INSIDE that allowance and settles correctly — that is the skew working, not
+> the check failing.
+>
+> This has now produced a false "the negative did not refuse" twice, in two
+> separate rehearsals, both times because the elapsed gap was shorter than it
+> looked. Run `date -u` immediately before the transfer and immediately before
+> the order, and read the difference. The cheapest way to get the gap is to make
+> the transfer early, run the other checks, and come back to it — it does not
+> have to be consecutive.
+
 ---
 
 ## 5. Close and draw
@@ -438,11 +499,16 @@ curl -s -b /tmp/admin.txt -o /dev/null -w "%{http_code}\n" \
 
 **Expect** `303` to `/admin`.
 
-**If you get `409` "The announced block has not arrived yet"**, that is correct
-behaviour, not a bug: the announced slot is an hour past the close by design. On
-devnet you can wait, or create the next rehearsal raffle with a short duration so
-the announced slot lands sooner. **The draw never substitutes a different slot** —
-which slot was announced is part of what was published.
+**If you get `409` "The instant this raffle's draw is anchored to has not passed
+yet"**, that is correct behaviour, not a bug: the anchor is ten minutes past the
+close by design. Wait it out. **The draw never reaches for an earlier block** —
+which instant was published is part of the commitment, and the block that instant
+resolves to is the chain's answer, not ours.
+
+Note what does NOT happen here any more: a skipped slot used to produce this same
+409 permanently, because the design named one slot and that slot had no block.
+"The first block at or after T" is well defined whether or not any particular
+slot produced one, so the search steps over the hole.
 
 Then check the public page:
 
@@ -453,6 +519,33 @@ curl -s $API/r/$SLUG/verify | grep -o "they agree\|THEY DO NOT AGREE"
 **Expect** `they agree`. The page **recomputes** the winner from the published
 inputs rather than displaying the stored one — if those ever disagreed, it would
 say so.
+
+### Negative 5c — a draw whose block predates the close is impossible
+
+**THE CHECK THIS WHOLE MECHANISM EXISTS FOR**
+(`docs/findings-2026-08-31-draw-margin.md`, `docs/decisions.md` Q14). Under the
+old design the draw's block routinely existed while tickets were still on sale,
+which let anyone who read its hash compute the winning ticket and then buy
+exactly that ticket.
+
+The application refuses it (`checkDrawAnchor`) and the search cannot produce it.
+Both are code. This checks the layer underneath, which is the one a bug cannot
+route around:
+
+```bash
+# 1. The database will not store a draw anchored to a block from during the sale.
+docker exec nftraffle-pg psql -U nftraffle -d nftraffle -c \
+  "UPDATE raffles SET draw_block_time = ends_at - interval '1 minute' WHERE slug = '$SLUG';"
+
+# 2. And an anchor cannot be placed before the close in the first place.
+docker exec nftraffle-pg psql -U nftraffle -d nftraffle -c \
+  "UPDATE raffles SET draw_at = ends_at - interval '1 minute' WHERE slug = '$SLUG';"
+```
+
+**Expect both to FAIL**, naming `raffles_anchor_block_after_close` and
+`raffles_anchor_after_close`. A success on either is a stop — it means the
+constraint is missing from this database, and the only thing standing between a
+raffle and a knowable-early draw is application code.
 
 Confirm the seed was not published early:
 
@@ -523,8 +616,9 @@ The rehearsal passes when all of these hold:
 | 4b | Reused signature | `signature_reused`, no second ticket |
 | 4c | Expired order | `expired` |
 | 4d | Transfer predating the order | `outside_window` |
-| 5 | Draw against the announced slot | `/verify` says **they agree** |
+| 5 | Draw against the anchored instant | `/verify` says **they agree** |
 | 5b | Seed hidden before the draw | `/verify` says **not revealed** |
+| 5c | A draw anchored before the close | **refused** by `raffles_anchor_block_after_close` and `raffles_anchor_after_close` |
 | 6 | Payout with both legs | `303`, page shows both signatures |
 | 6a | Prize to the wrong wallet | `prize_wrong_recipient` |
 | 6b | Seller underpaid | `insufficient_amount` |

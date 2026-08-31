@@ -34,7 +34,7 @@ async function raffle(overrides: Partial<Parameters<typeof createDraft>[0]> = {}
     ticketPriceNative: 100_000_000n,
     maxTickets: 10,
     houseFeeBps: 500,
-    drawSlot: 500_000_000n + BigInt(counter),
+    drawAt: new Date(Date.now() + 3600_000 + 600_000),
     endsAt: new Date(Date.now() + 3600_000),
     ...seedPair(),
     ...overrides,
@@ -113,6 +113,8 @@ describe("the payout queue carries what an operator has to send", () => {
       (
         await recordDraw(row.id, {
           drawBlockhash: "EETubP5AKHgjPAhzPAFcb8BAY1hMH639CWCFTqi3teA9",
+      drawHeight: 1n,
+      drawBlockTimeMs: Date.now() + 4_800_000,
           winnerWallet: BUYER,
           winningTicket: 1,
         })
@@ -141,6 +143,8 @@ describe("the payout queue carries what an operator has to send", () => {
       (
         await recordDraw(row.id, {
           drawBlockhash: "EETubP5AKHgjPAhzPAFcb8BAY1hMH639CWCFTqi3teA9",
+      drawHeight: 1n,
+      drawBlockTimeMs: Date.now() + 4_800_000,
           winnerWallet: BUYER,
           winningTicket: 2,
         })

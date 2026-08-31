@@ -141,25 +141,24 @@ export function primaryEndpoint(): string {
 }
 
 /**
- * The blockhash of one slot, or null when the chain does not have it.
+ * One slot's block: its hash and its timestamp.
  *
- * The draw's second ingredient. `getBlock` is asked for the minimum: no
- * transactions, no rewards, no signatures — just the header. A raffle's draw
- * needs one 32-byte value, and pulling a whole block to read it would be a
- * multi-megabyte response on a busy slot, on a paid provider, per draw.
+ * `getBlock` is asked for the minimum — no transactions, no rewards, no
+ * signatures. The draw needs one hash and one time, and pulling a whole block
+ * to read them would be a multi-megabyte response on a busy slot, per probe,
+ * and the anchor search makes several.
  *
- * `null` rather than a throw for a slot that was SKIPPED, which is a real and
- * ordinary thing on Solana: not every slot produces a block. The caller decides
- * what to do about it, and this project's caller REFUSES — it does not walk
- * forward to the next produced slot. Which slot the draw uses is part of what
- * was announced when the raffle was created, so quietly substituting another
- * would make the published method a description of something else. An operator
- * whose announced slot was skipped has a raffle that must be cancelled, not one
- * that gets drawn against a slot nobody was told about.
+ * **`null` for a SKIPPED slot**, which is ordinary on Solana: not every slot
+ * produces a block. Some providers report that as a JSON-RPC error rather than
+ * a null result, so both shapes mean the same thing here. The anchor search
+ * steps over nulls rather than treating them as "no block after this point".
  *
- * WHO CALLS THIS: `POST /api/admin/raffles/[id]/draw`, and nothing else.
+ * WHO CALLS THIS: `chain/solana/index.ts`, as `blockAt` and through the shared
+ * anchor search.
  */
-export async function blockhashForSlot(slot: bigint): Promise<string | null> {
+export async function blockAtSlot(
+  slot: bigint,
+): Promise<{ hash: string; timeMs: number } | null> {
   let result: unknown;
   try {
     result = await rpcCall(primaryEndpoint(), "getBlock", [
@@ -172,32 +171,34 @@ export async function blockhashForSlot(slot: bigint): Promise<string | null> {
       },
     ]);
   } catch {
-    // A skipped slot is reported by some providers as a JSON-RPC error rather
-    // than a null result, so both shapes have to mean the same thing here.
     return null;
   }
-  const blockhash = (result as { blockhash?: unknown } | null)?.blockhash;
-  return typeof blockhash === "string" && blockhash.length > 0 ? blockhash : null;
+  const block = result as { blockhash?: unknown; blockTime?: unknown } | null;
+  const hash = block?.blockhash;
+  const time = block?.blockTime;
+  if (typeof hash !== "string" || hash.length === 0) return null;
+  // A block with no timestamp cannot be placed against an anchor, and guessing
+  // would defeat the whole point of anchoring to a time.
+  if (typeof time !== "number") return null;
+  return { hash, timeMs: time * 1000 };
 }
 
 /**
  * The chain's current slot.
  *
- * Used once, when a raffle is created, to work out which future slot to
- * announce. Deliberately `confirmed` rather than `processed`: a processed slot
- * can be rolled back, and announcing a slot derived from one that never
- * finalises would put the commitment's reference point somewhere the chain
- * later disagrees about.
+ * `confirmed` rather than `processed`: a processed slot can be rolled back, and
+ * an anchor search bounded by one that never finalises would be searching a
+ * range the chain later disagrees about.
  *
- * WHO CALLS THIS: `POST /api/raffles`, and nothing else.
+ * WHO CALLS THIS: `chain/solana/index.ts`, as `currentHeight` and through the
+ * shared anchor search.
  */
 export async function currentSlot(): Promise<bigint | null> {
   try {
     const result = await rpcCall(primaryEndpoint(), "getSlot", [{ commitment: RPC_COMMITMENT }]);
     return typeof result === "number" ? BigInt(result) : null;
   } catch {
-    // Fails closed at the caller: a raffle whose announced slot could not be
-    // computed must not be created with a guessed one.
+    // Fails closed at the caller: a draw whose head could not be read waits.
     return null;
   }
 }

@@ -59,7 +59,22 @@ export type Raffle = {
   seedHash: string;
   /** The REVEALED seed. Null until the draw — safe for any public reader. */
   seed: string | null;
-  drawSlot: bigint;
+  /**
+   * The instant this raffle's entropy is anchored to, published at creation.
+   * The draw uses the first block at or after it (docs/decisions.md Q14).
+   */
+  drawAt: Date;
+  /**
+   * Which block that instant actually resolved to. NULL until the draw — it is
+   * a RESULT, not a commitment, and the chain decides it.
+   */
+  drawHeight: bigint | null;
+  /**
+   * The anchor block's own timestamp, as the chain reported it. NULL until the
+   * draw. This is what `/r/[slug]/verify` shows a reader so they can confirm the
+   * block came after the close without taking our word for it (migration 006).
+   */
+  drawBlockTime: Date | null;
   drawBlockhash: string | null;
   winnerWallet: string | null;
   winningTicket: number | null;
@@ -88,7 +103,9 @@ type RaffleRow = {
   status: RaffleStatus;
   seed_hash: string;
   seed: string | null;
-  draw_slot: string;
+  draw_at: Date;
+  draw_height: string | null;
+  draw_block_time: Date | null;
   draw_blockhash: string | null;
   winner_wallet: string | null;
   winning_ticket: number | null;
@@ -104,7 +121,7 @@ type RaffleRow = {
 
 const COLUMNS = `id, slug, chain, seller_wallet, prize_asset, collection_id, ticket_price_native,
   max_tickets, house_fee_bps, listing_fee_signature, escrow_signature, status, seed_hash, seed,
-  draw_slot, draw_blockhash, winner_wallet, winning_ticket, opens_at, ends_at, created_at,
+  draw_at, draw_height, draw_block_time, draw_blockhash, winner_wallet, winning_ticket, opens_at, ends_at, created_at,
   drawn_at, prize_signature, proceeds_signature, paid_at, cancelled_reason`;
 
 /**
@@ -129,7 +146,9 @@ function toRaffle(row: RaffleRow): Raffle {
     status: row.status,
     seedHash: row.seed_hash,
     seed: row.seed,
-    drawSlot: BigInt(row.draw_slot),
+    drawAt: row.draw_at,
+    drawHeight: row.draw_height === null ? null : BigInt(row.draw_height),
+    drawBlockTime: row.draw_block_time,
     drawBlockhash: row.draw_blockhash,
     winnerWallet: row.winner_wallet,
     winningTicket: row.winning_ticket,
@@ -168,8 +187,11 @@ export type CreateDraftInput = {
   maxTickets: number;
   /** Frozen per raffle: a later change to HOUSE_FEE_BPS must not reach back. */
   houseFeeBps: number;
-  /** Announced at creation. Names a slot that does not exist yet. */
-  drawSlot: bigint;
+  /**
+   * Announced at creation. Names an INSTANT that has not arrived yet, not a
+   * block — from `drawAnchorFor()` in `raffles/schedule.ts`.
+   */
+  drawAt: Date;
   endsAt: Date;
   /** From `commitSeed()`. Published immediately. */
   seedHash: string;
@@ -208,7 +230,7 @@ export async function createDraft(input: CreateDraftInput): Promise<CreateDraftR
     const row = await queryOne<RaffleRow>(
       `INSERT INTO raffles
          (id, slug, chain, seller_wallet, prize_asset, collection_id, ticket_price_native,
-          max_tickets, house_fee_bps, seed_hash, seed_secret, draw_slot, ends_at)
+          max_tickets, house_fee_bps, seed_hash, seed_secret, draw_at, ends_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
        RETURNING ${COLUMNS}`,
       [
@@ -223,7 +245,7 @@ export async function createDraft(input: CreateDraftInput): Promise<CreateDraftR
         input.houseFeeBps,
         input.seedHash,
         input.seedSecret,
-        input.drawSlot.toString(),
+        input.drawAt,
         input.endsAt,
       ],
     );
@@ -334,13 +356,27 @@ export type DrawResult =
  * `status = 'closed'` in the predicate is what makes drawing exactly once
  * possible, and it is also what stops an early draw.
  *
+ * `draw_height` is written here rather than at creation because it is not a
+ * commitment: the raffle committed to an INSTANT, and which block that instant
+ * landed on is something the chain answered afterwards (docs/decisions.md Q14).
+ * Recording it is what lets a reader look the block up without repeating the
+ * search.
+ *
  * The seed is read from `seed_secret` and copied into `seed`, which is what
  * publishes it. Before this runs, `seed` is NULL and any public reader that
  * renders it shows nothing — see migration 003 for why that split exists.
  */
 export async function recordDraw(
   id: string,
-  draw: { drawBlockhash: string; winnerWallet: string; winningTicket: number },
+  draw: {
+    drawBlockhash: string;
+    /** Which block the anchor resolved to. Recorded so a reader can look it up. */
+    drawHeight: bigint;
+    /** That block's timestamp. The constraint refuses anything before the close. */
+    drawBlockTimeMs: number;
+    winnerWallet: string;
+    winningTicket: number;
+  },
 ): Promise<DrawResult> {
   return transaction(async (client) => {
     const locked = await client.query<{ status: RaffleStatus; seed_secret: string | null }>(
@@ -380,12 +416,22 @@ export async function recordDraw(
           SET status = 'drawn',
               seed = $2,
               draw_blockhash = $3,
-              winner_wallet = $4,
-              winning_ticket = $5,
+              draw_height = $4,
+              draw_block_time = $5,
+              winner_wallet = $6,
+              winning_ticket = $7,
               drawn_at = now()
         WHERE id = $1
         RETURNING ${COLUMNS}`,
-      [id, seedSecret, draw.drawBlockhash, draw.winnerWallet, draw.winningTicket],
+      [
+        id,
+        seedSecret,
+        draw.drawBlockhash,
+        draw.drawHeight.toString(),
+        new Date(draw.drawBlockTimeMs),
+        draw.winnerWallet,
+        draw.winningTicket,
+      ],
     );
     return { ok: true, raffle: toRaffle(updated.rows[0]) };
   });

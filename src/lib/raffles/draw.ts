@@ -9,7 +9,7 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
  * database, or the environment. A draw that depends on something unpublished is
  * a draw nobody can reproduce, however honest it actually is.
  *
- * WHO CALLS THIS: `commitSeed` from `raffles/lifecycle.ts` when a draft is
+ * WHO CALLS THIS: `commitSeed` from `POST /api/raffles` when a draft is
  * created; `deriveWinner` and `verifyCommitment` from `raffles/lifecycle.ts`
  * when a closed raffle is drawn; `drawMaterial` and `verifyCommitment` again
  * from the public page at `/r/[slug]/verify`, which shows the reader the same
@@ -56,12 +56,85 @@ export function verifyCommitment(seed: string, seedHash: string): boolean {
   return timingSafeEqual(offered, expected);
 }
 
+export type AnchorRefusal =
+  /**
+   * The block offered as the draw's entropy is older than the sale's close, so
+   * its hash existed while tickets could still be bought. THE ATTACK: a buyer
+   * who reads it can compute the winning number before deciding whether to buy,
+   * and buy exactly the ticket that wins.
+   */
+  | "anchor_before_close"
+  /** Older than the anchor the raffle published. Not the block that was committed to. */
+  | "anchor_before_commitment";
+
+/**
+ * Whether a block may decide this raffle.
+ *
+ * **This is the rule the whole draw redesign exists to enforce**
+ * (`docs/decisions.md` Q14, `docs/findings-2026-08-31-draw-margin.md`). The
+ * previous design named a block NUMBER at creation, predicted from an assumed
+ * slot rate; on mainnet the real rate was 317 ms against an assumed 400, so the
+ * named block arrived roughly a fifth early — and for any raffle running longer
+ * than about four hours, it arrived BEFORE the sale closed. Its hash was then
+ * public while tickets were still on sale.
+ *
+ * The redesign anchors to an instant instead of a number, which removes the
+ * arithmetic that was wrong. This function is the belt to that braces: it
+ * checks the resolved block's OWN timestamp against the close, so a draw can
+ * only ever use entropy that did not exist while anyone could still buy.
+ *
+ * **Both conditions are checked, not just the interesting one.** Being after
+ * the close is the safety property; being at or after the published anchor is
+ * the DETERMINISM property — anyone recomputing the draw looks up the first
+ * block at or after `drawAt`, and a server that used an earlier one would be
+ * publishing a method it did not follow.
+ *
+ * Pure, like everything in this file: the caller supplies the three instants,
+ * so the same check runs in the draw route, in the tests, and on the public
+ * verification page.
+ *
+ * WHO CALLS THIS: `POST /api/admin/raffles/[id]/draw` before it derives a
+ * winner, and `/r/[slug]/verify` when it re-checks a completed draw.
+ */
+export function checkDrawAnchor(input: {
+  /** The resolved block's timestamp, as the chain reports it. */
+  blockTimeMs: number;
+  /** When the sale closed. */
+  endsAtMs: number;
+  /** The instant published at creation. */
+  drawAtMs: number;
+}): { ok: true } | { ok: false; reason: AnchorRefusal; message: string } {
+  if (input.blockTimeMs <= input.endsAtMs) {
+    return {
+      ok: false,
+      reason: "anchor_before_close",
+      message:
+        "That block is not after this raffle closed, so its hash was public while tickets were " +
+        "still on sale. The draw will not use it.",
+    };
+  }
+  if (input.blockTimeMs < input.drawAtMs) {
+    return {
+      ok: false,
+      reason: "anchor_before_commitment",
+      message:
+        "That block is earlier than the instant this raffle published, so it is not the block " +
+        "the draw committed to.",
+    };
+  }
+  return { ok: true };
+}
+
 export type DrawInputs = {
   /** The commitment published when the raffle was created. */
   seedHash: string;
   /** The seed revealed at the draw. */
   seed: string;
-  /** The blockhash of the slot announced at creation. */
+  /**
+   * The hash of the first block at or after the instant announced at creation.
+   * Which block that is comes from the chain, not from us — see
+   * `chain/anchor.ts`.
+   */
   drawBlockhash: string;
   /** This raffle's id. */
   raffleId: string;
@@ -74,10 +147,14 @@ export type DrawInputs = {
  *
  * - `seed` stops the chain from deciding alone, and it was committed to before
  *   the blockhash existed, so it cannot have been chosen to suit a result.
- * - `drawBlockhash` stops US from deciding alone. It comes from a slot named
- *   before a single ticket was sold.
- * - `raffleId` stops two raffles that close against the same announced slot
- *   from producing correlated outcomes. Without it, two draws seeded by the
+ * - `drawBlockhash` stops US from deciding alone. It comes from the first block
+ *   at or after an INSTANT named before a single ticket was sold — and that
+ *   block did not exist while any ticket could still be bought, which
+ *   `checkDrawAnchor` above refuses to proceed without.
+ * - `raffleId` stops two raffles that resolve to the same anchor block from
+ *   producing correlated outcomes. Two raffles closing in the same ten minutes
+ *   now genuinely can share a block, which the old per-raffle slot made rarer
+ *   and which this makes ordinary — so this ingredient matters more than it did. Without it, two draws seeded by the
  *   same process on the same day could land on the same index, and the
  *   correlation would only be visible to somebody who went looking.
  * - `seedHash` is redundant given `seed` and is included anyway, because the

@@ -5,11 +5,10 @@ import {
   LAMPORTS_PER_SOL,
   SOLANA_BLOCKTIME_SKEW_SECONDS,
   SOLANA_DECIMALS,
-  SOLANA_DRAW_MARGIN_MS,
-  SOLANA_SLOT_MS,
 } from "./constants";
 import { asset as dasAsset, assetOwner as dasOwner } from "./das";
-import { blockhashForSlot, currentSlot, fetchTransaction } from "./rpc";
+import { blockAtSlot, currentSlot, fetchTransaction } from "./rpc";
+import { findBlockAtOrAfter } from "../anchor";
 import { generateReference } from "./reference";
 import { verifySolTransfer } from "./transfer";
 import { isAddressShaped } from "../../payments/config";
@@ -83,18 +82,14 @@ export const solanaAdapter: ChainAdapter = {
   },
 
   currentHeight: currentSlot,
-  hashAtHeight: blockhashForSlot,
+  blockAt: blockAtSlot,
 
   /**
-   * Solana's announcement, and the reason its arithmetic is simpler than the
-   * EVM one's: skipped slots make the chain advance more slowly than the wall
-   * clock, so a slot announced this far ahead arrives LATER than intended,
-   * never earlier. Later is the safe direction — the raffle has already closed.
+   * Delegates to the shared search. Solana's contribution is that `blockAt`
+   * answers null for a skipped slot, which the search steps over.
    */
-  announceHeight({ currentHeight, nowMs, endsAtMs }) {
-    const aheadMs = endsAtMs - nowMs + SOLANA_DRAW_MARGIN_MS;
-    const slotsAhead = BigInt(Math.ceil(Math.max(aheadMs, 0) / SOLANA_SLOT_MS));
-    return currentHeight + (slotsAhead > 0n ? slotsAhead : 1n);
+  blockAtOrAfter(anchorMs) {
+    return findBlockAtOrAfter({ currentHeight: currentSlot, blockAt: blockAtSlot }, anchorMs);
   },
 
   paymentReference: generateReference,

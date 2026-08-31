@@ -50,19 +50,34 @@ Reaching back and taking more of a sale they already agreed to would be changing
 the terms after the goods were handed over, and the fact that we technically
 could is exactly why the schema is written so that we do not.
 
-## OPEN DEFECT: the draw margin assumes a slot time Solana does not have
+## The draw is anchored to a time, and there is no duration limit
 
-**Read [`findings-2026-08-31-draw-margin.md`](findings-2026-08-31-draw-margin.md)
-before running a raffle longer than two hours on mainnet.**
+**Closed 2026-08-31. The two-hour interim rule is withdrawn**; raffles may run
+the full 30 days again.
 
-Measured 2026-08-31: mainnet runs at 317 ms/slot and devnet at 166, against the
-400 ms the margin assumes. The announced draw slot therefore arrives EARLIER than
-intended, and for raffles longer than roughly four hours on mainnet it arrives
-before the sale closes — which lets whoever holds the seed compute the winning
-ticket while tickets are still on sale.
+The defect it guarded against is in
+[`findings-2026-08-31-draw-margin.md`](findings-2026-08-31-draw-margin.md): the
+draw used to announce a block NUMBER predicted from an assumed 400 ms slot rate,
+and mainnet actually runs at 317 ms (devnet 166). The announced block therefore
+arrived early, and past roughly four hours of duration it arrived BEFORE the sale
+closed — so its hash was public while tickets were still on sale, and anyone who
+read it could compute the winning ticket and buy exactly that one.
 
-**Interim rule until it is fixed: no raffle longer than two hours.** The proper
-fix is to commit to a wall-clock time rather than a slot number.
+**What replaced it** (`docs/decisions.md` Q14): a raffle publishes an instant,
+`draw_at = ends_at + 10 minutes`, and the draw uses the first block at or after
+it. A time does not drift with the slot rate, so duration stopped being a safety
+parameter — the margin is the same ten minutes for a 15-minute raffle and a
+30-day one, which `raffles/__tests__/draw-anchor.test.ts` asserts directly.
+
+**What you will see as an operator.** A draw run before `draw_at` returns `409`
+and says the anchor has not passed. That is the mechanism, not a fault: wait. A
+draw run *late* is harmless — the anchor resolves to the same block whenever you
+run it, so waiting gives nobody a choice of outcome.
+
+**If a draw is ever refused with "this block existed while tickets were on
+sale", stop and escalate.** That refusal should be unreachable: the anchor is
+after the close by construction and the database will not store a draw that
+violates it. Reaching it means something is wrong that this note does not cover.
 
 ## Ceilings a seller may not exceed
 
@@ -73,7 +88,7 @@ they are judgement calls, not invariants:
 |---|---|---|
 | Ticket price | 10 SOL | A mis-typed price is a raffle nobody can enter, and the seller does not find out until it closes empty. |
 | Tickets per raffle | 10,000 | The draw writes one row per ticket and the verification page lists them all. Past this the page stops being readable, which defeats its purpose. |
-| Raffle duration | 30 days | Escrow holds somebody else's property for the whole window, and every day of that is a day the operator is responsible for an asset they cannot sell, move or insure. |
+| Raffle duration | 30 days | Escrow holds somebody else's property for the whole window, and every day of that is a day the operator is responsible for an asset they cannot sell, move or insure. **Operational, not a safety bound** — see the draw-anchor section above. |
 
 The ticket ceiling is the only one with a mechanical reason behind it. The other
 two are operational and can move.

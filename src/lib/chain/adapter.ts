@@ -33,6 +33,7 @@
 
 import type { EscrowTransfer } from "../raffles/escrow";
 import type { NativeTransferResult } from "../payments/native-transfer";
+import type { AnchorBlock } from "./anchor";
 
 /**
  * The chains this product knows about.
@@ -150,20 +151,27 @@ export interface ChainAdapter {
   /** The chain's current height — slot on Solana, block number on EVM. */
   currentHeight(): Promise<bigint | null>;
 
-  /** The hash at `height`, or null when that height has no block or is not reached. */
-  hashAtHeight(height: bigint): Promise<string | null>;
+  /**
+   * One block, or null when that height has no block — a skipped Solana slot,
+   * or a height not yet reached.
+   *
+   * The primitive the anchor search is built on. Smaller and more honest than
+   * the `hashAtHeight` it replaces, which could not say WHEN the block was.
+   */
+  blockAt(height: bigint): Promise<{ hash: string; timeMs: number } | null>;
 
   /**
-   * Which future height to announce for a raffle closing at `endsAtMs`.
+   * The first block at or after `anchorMs`, or null when the anchor has not
+   * arrived.
    *
-   * **The safety direction differs per chain and each adapter documents its
-   * own.** Solana can only lag (skipped slots), so an announced slot arrives
-   * later than intended — safe. An EVM chain running faster than measured makes
-   * the announced block arrive while tickets are still selling, which is the
-   * failure that matters. Each implementation carries its measurement, its date
-   * and its margin.
+   * **The draw's entropy.** A block at or after an instant cannot exist before
+   * that instant, on any chain, at any slot rate — which is the guarantee the
+   * old announced-height design could not make (docs/decisions.md Q14).
+   *
+   * Every adapter delegates to the one shared search in `chain/anchor.ts`; none
+   * implements its own.
    */
-  announceHeight(input: { currentHeight: bigint; nowMs: number; endsAtMs: number }): bigint;
+  blockAtOrAfter(anchorMs: number): Promise<AnchorBlock | null>;
 
   // --- payment intent -------------------------------------------------------
 

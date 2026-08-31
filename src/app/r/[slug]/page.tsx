@@ -88,8 +88,8 @@ export default async function RafflePage({ params }: PageProps<"/r/[slug]">) {
           <dt className="text-neutral-500">Commitment</dt>
           <dd className="figure break-all">{raffle.seedHash}</dd>
 
-          <dt className="text-neutral-500">Announced slot</dt>
-          <dd className="figure">{raffle.drawSlot.toString()}</dd>
+          <dt className="text-neutral-500">Entropy anchored to</dt>
+          <dd className="figure">{raffle.drawAt.toISOString()}</dd>
 
           {raffle.winnerWallet && (
             <>

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { query, queryOne } from "../../db";
 import { commitSeed, verifyCommitment } from "../draw";
+import { drawAnchorFor } from "../schedule";
 import {
   advanceRaffle,
   cancelRaffle,
@@ -54,7 +55,7 @@ async function draft(overrides: Partial<Parameters<typeof createDraft>[0]> = {})
     ticketPriceNative: 100_000_000n,
     maxTickets: 10,
     houseFeeBps: 500,
-    drawSlot: 300_000_000n + BigInt(counter),
+    drawAt: drawAnchorFor(new Date(Date.now() + 60 * 60_000)),
     endsAt: new Date(Date.now() + 60 * 60_000),
     ...seedPair(),
     ...overrides,
@@ -108,7 +109,7 @@ describe("createDraft", () => {
     // honours it rather than relying on the constraint alone.
     const raffle = await draft();
     expect(raffle.seedHash).toMatch(/^[0-9a-f]{64}$/);
-    expect(raffle.drawSlot).toBeGreaterThan(0n);
+    expect(raffle.drawAt.getTime()).toBeGreaterThan(raffle.endsAt.getTime());
   });
 
   it("refuses a second live raffle for the same prize", async () => {
@@ -122,7 +123,7 @@ describe("createDraft", () => {
       ticketPriceNative: 1n,
       maxTickets: 1,
       houseFeeBps: 0,
-      drawSlot: 1n,
+      drawAt: new Date(Date.now() + 660_000),
       endsAt: new Date(Date.now() + 60_000),
       ...seedPair(),
     });
@@ -150,7 +151,7 @@ describe("createDraft", () => {
       ticketPriceNative: 1n,
       maxTickets: 1,
       houseFeeBps: 0,
-      drawSlot: 1n,
+      drawAt: new Date(Date.now() + 660_000),
       endsAt: new Date(Date.now() + 60_000),
       ...seedPair(),
     });
@@ -236,6 +237,8 @@ describe("advanceRaffle — the machine derives the status", () => {
     await advanceRaffle(row.id);
     await recordDraw(row.id, {
       drawBlockhash: "EETubP5AKHgjPAhzPAFcb8BAY1hMH639CWCFTqi3teA9",
+      drawHeight: 1n,
+      drawBlockTimeMs: Date.now() + 4_800_000,
       winnerWallet: OTHER_WALLET,
       winningTicket: 1,
     });
@@ -253,9 +256,47 @@ describe("recordDraw", () => {
 
   const DRAW = {
     drawBlockhash: "EETubP5AKHgjPAhzPAFcb8BAY1hMH639CWCFTqi3teA9",
+    drawHeight: 1n,
+    // Comfortably past both the close and the anchor. The constraint from
+    // migration 006 rejects anything that is not, which one of the cases below
+    // asserts on purpose.
+    drawBlockTimeMs: Date.now() + 4_800_000,
     winnerWallet: OTHER_WALLET,
     winningTicket: 2,
   };
+
+  it("REFUSES to store a draw whose block predates the close", async () => {
+    /**
+     * THE ATTACK FROM docs/findings-2026-08-31-draw-margin.md, AT THE LAST
+     * PLACE IT COULD STILL LAND.
+     *
+     * `checkDrawAnchor` refuses this in the draw route, and the anchor search
+     * cannot return such a block in the first place. Both of those are
+     * application code, and the previous design was also safe by an argument
+     * about application code — right up until a measured slot rate turned out
+     * not to be the real one.
+     *
+     * So migration 006 puts the same rule in a constraint. This asserts the
+     * database itself will not hold a raffle whose winning number could have
+     * been computed while tickets were still on sale, whatever called it: this
+     * function, a script, or somebody's hand-written UPDATE.
+     *
+     * It throws rather than returning a reason, deliberately. Every other
+     * failure in this module is a state a caller can legitimately reach and
+     * should handle; this one is a caller that should not exist.
+     */
+    const row = await closedWithTickets();
+    await expect(
+      recordDraw(row.id, { ...DRAW, drawBlockTimeMs: Date.now() - 3_600_000 }),
+    ).rejects.toThrow(/raffles_anchor_block_after_close/);
+
+    // And nothing was written. A refused draw must leave the raffle drawable,
+    // not half-drawn: the seed stays unpublished and the status stays closed.
+    const after = await raffleById(row.id);
+    expect(after?.status).toBe("closed");
+    expect(after?.seed).toBeNull();
+    expect(after?.drawBlockhash).toBeNull();
+  });
 
   it("records the reveal and the winner together", async () => {
     const row = await closedWithTickets();
@@ -347,6 +388,8 @@ describe("recordPayout", () => {
     await advanceRaffle(row.id);
     await recordDraw(row.id, {
       drawBlockhash: "EETubP5AKHgjPAhzPAFcb8BAY1hMH639CWCFTqi3teA9",
+      drawHeight: 1n,
+      drawBlockTimeMs: Date.now() + 4_800_000,
       winnerWallet: OTHER_WALLET,
       winningTicket: 1,
     });
@@ -407,6 +450,8 @@ describe("cancelRaffle", () => {
     await advanceRaffle(row.id);
     await recordDraw(row.id, {
       drawBlockhash: "EETubP5AKHgjPAhzPAFcb8BAY1hMH639CWCFTqi3teA9",
+      drawHeight: 1n,
+      drawBlockTimeMs: Date.now() + 4_800_000,
       winnerWallet: OTHER_WALLET,
       winningTicket: 1,
     });
@@ -510,6 +555,8 @@ describe("cancelRaffleAsSeller", () => {
     await advanceRaffle(row.id);
     await recordDraw(row.id, {
       drawBlockhash: "EETubP5AKHgjPAhzPAFcb8BAY1hMH639CWCFTqi3teA9",
+      drawHeight: 1n,
+      drawBlockTimeMs: Date.now() + 4_800_000,
       winnerWallet: OTHER_WALLET,
       winningTicket: 1,
     });

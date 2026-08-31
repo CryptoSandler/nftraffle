@@ -53,7 +53,7 @@ async function openRaffleFixture(maxTickets = 10) {
     ticketPriceNative: PRICE,
     maxTickets,
     houseFeeBps: 500,
-    drawSlot: 400_000_000n + BigInt(counter),
+    drawAt: new Date(Date.now() + 70 * 60_000),
     endsAt: new Date(Date.now() + 60 * 60_000),
     ...seedPair(),
   });
@@ -138,7 +138,7 @@ describe("createTicketOrder", () => {
       ticketPriceNative: PRICE,
       maxTickets: 5,
       houseFeeBps: 0,
-      drawSlot: 1n,
+      drawAt: new Date(Date.now() + 660_000),
       endsAt: new Date(Date.now() + 60_000),
       ...seedPair(),
     });

@@ -1,13 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { checkSellerChoices, SELLER_LIMITS } from "../schedule";
+import { checkSellerChoices, drawAnchorFor, SELLER_LIMITS } from "../schedule";
 
 /**
- * The seller's ceilings. Chain-neutral by design.
+ * The seller's ceilings, and the anchor their close implies.
  *
- * The announced-height arithmetic that used to be tested here now lives with
- * each chain's adapter — `chain/solana/index.ts` and
- * `chain/robinhood/schedule.ts` — because the two chains disagree about which
- * direction the estimate may err in. See `chain/robinhood/__tests__/schedule.test.ts`.
+ * Chain-neutral, and now genuinely so. The announced-height arithmetic that
+ * used to be tested here moved to the chain adapters when the second chain
+ * arrived — the two disagreed about which direction a slot-rate estimate may
+ * err in — and then went away entirely when it turned out the estimate erred in
+ * the dangerous direction on BOTH (docs/decisions.md Q14). A wall-clock anchor
+ * needs no per-chain arithmetic to test.
+ *
+ * The anchor's safety property is not here: it is in `draw-anchor.test.ts`,
+ * which asserts what this margin has to buy.
  */
 
 const NOW = Date.parse("2026-08-28T12:00:00Z");
@@ -17,7 +22,8 @@ describe("checkSellerChoices", () => {
 
   it("accepts an ordinary raffle and returns its close time", () => {
     const result = checkSellerChoices(base);
-    expect(result).toEqual({ ok: true, endsAt: new Date(NOW + 1_440 * 60_000) });
+    const endsAt = new Date(NOW + 1_440 * 60_000);
+    expect(result).toEqual({ ok: true, endsAt, drawAt: drawAnchorFor(endsAt) });
   });
 
   it("refuses a free ticket", () => {

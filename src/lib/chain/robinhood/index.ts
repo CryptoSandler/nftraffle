@@ -13,8 +13,9 @@ import {
   sameAddress,
   type Erc721Asset,
 } from "./erc721";
-import { blockHashAtHeight, blockTimestampSeconds, currentBlockHeight, evmCall } from "./rpc";
-import { announceRobinhoodHeight } from "./schedule";
+import { blockAtHeight, blockTimestampSeconds, currentBlockHeight, evmCall } from "./rpc";
+import { findBlockAtOrAfter } from "../anchor";
+
 import { readErc721Transfer, readNativeTransfer } from "./transfer";
 
 /**
@@ -211,8 +212,19 @@ export const robinhoodAdapter: ChainAdapter = {
   },
 
   currentHeight: currentBlockHeight,
-  hashAtHeight: blockHashAtHeight,
-  announceHeight: announceRobinhoodHeight,
+  blockAt: blockAtHeight,
+
+  /**
+   * The same shared search Solana uses. Robinhood Chain had the identical
+   * slot-rate defect, measured — this removes it from both without a per-chain
+   * constant (docs/decisions.md Q14).
+   */
+  blockAtOrAfter(anchorMs) {
+    return findBlockAtOrAfter(
+      { currentHeight: currentBlockHeight, blockAt: blockAtHeight },
+      anchorMs,
+    );
+  },
 
   /**
    * EVM has no payment-reference convention and needs none: transfers to the

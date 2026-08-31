@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { deriveWinner, drawMaterial, verifyCommitment } from "../../../../lib/raffles/draw";
+import {
+  checkDrawAnchor,
+  deriveWinner,
+  drawMaterial,
+  verifyCommitment,
+} from "../../../../lib/raffles/draw";
 import { raffleBySlug } from "../../../../lib/raffles/lifecycle";
 import { ticketsFor } from "../../../../lib/raffles/tickets";
 
@@ -52,6 +57,29 @@ export default async function VerifyPage({ params }: PageProps<"/r/[slug]/verify
       })
     : null;
 
+  /**
+   * THE SECOND CHECK ON THIS PAGE, and it is new
+   * (docs/decisions.md Q14, docs/findings-2026-08-31-draw-margin.md).
+   *
+   * Recomputing the winner proves the arithmetic. It says nothing about whether
+   * the block feeding that arithmetic was allowed to — and under the previous
+   * design it frequently was not, because the announced block arrived before
+   * the sale closed and its hash was public while tickets were still on sale.
+   *
+   * So this re-runs the same rule the draw route enforced, from the published
+   * values, rather than asserting the server followed it. The reader can go
+   * further and confirm the timestamp itself against the chain — the
+   * instructions below say how, and that is the version that trusts nobody.
+   */
+  const anchorCheck =
+    raffle.drawBlockTime !== null
+      ? checkDrawAnchor({
+          blockTimeMs: raffle.drawBlockTime.getTime(),
+          endsAtMs: raffle.endsAt.getTime(),
+          drawAtMs: raffle.drawAt.getTime(),
+        })
+      : null;
+
   const agrees =
     recomputed !== null && raffle.winningTicket !== null
       ? recomputed.winningTicket === raffle.winningTicket
@@ -71,14 +99,23 @@ export default async function VerifyPage({ params }: PageProps<"/r/[slug]/verify
         </h2>
         <p className="mt-3 text-neutral-700">
           When this raffle was created, the server generated a random 32-byte seed, published{" "}
-          <code className="figure">sha256(seed)</code>, and announced the{" "}
-          {raffle.chain === "solana" ? "Solana slot" : "Robinhood Chain block"} whose hash the draw
-          would use. That {raffle.chain === "solana" ? "slot" : "block"} did not exist yet, so its
-          hash could not be known by us.
+          <code className="figure">sha256(seed)</code>, and published an{" "}
+          <strong>instant</strong> — ten minutes after the sale closes — that the draw&apos;s
+          entropy would be anchored to. The draw uses the first{" "}
+          {raffle.chain === "solana" ? "Solana block" : "Robinhood Chain block"} produced at or
+          after that instant. No such block existed when the raffle was created, so its hash could
+          not be known by us; and none can exist before the sale closes, so it cannot be known by a
+          buyer either.
         </p>
         <p className="mt-3 text-neutral-700">
-          When the raffle closed, the seed was published and the announced slot&apos;s blockhash
-          was read. The winner is:
+          It is an instant rather than a block number deliberately. A block number has to be
+          predicted from how fast the chain is running, and that prediction is wrong by however much
+          the real rate differs from the assumed one — early, if the chain is faster than assumed.
+          A time is not a prediction: a chain running at any speed still resolves the same instant.
+        </p>
+        <p className="mt-3 text-neutral-700">
+          When the raffle closed, the seed was published and that block&apos;s hash was read. The
+          winner is:
         </p>
         <pre className="figure mt-3 overflow-x-auto rounded border border-neutral-300 bg-neutral-50 p-4 text-xs">
 {`material       = sha256(seedHash + seed + blockhash + raffleId)
@@ -101,8 +138,17 @@ winningTicket  = (material as a big-endian integer mod ticketCount) + 1`}
           <dt className="text-neutral-500">seedHash</dt>
           <dd className="figure break-all">{raffle.seedHash}</dd>
 
-          <dt className="text-neutral-500">announced height</dt>
-          <dd className="figure">{raffle.drawSlot.toString()}</dd>
+          <dt className="text-neutral-500">anchored to (published at creation)</dt>
+          <dd className="figure">{raffle.drawAt.toISOString()}</dd>
+
+          <dt className="text-neutral-500">closed at</dt>
+          <dd className="figure">{raffle.endsAt.toISOString()}</dd>
+
+          <dt className="text-neutral-500">block used</dt>
+          <dd className="figure">{raffle.drawHeight?.toString() ?? "not resolved yet"}</dd>
+
+          <dt className="text-neutral-500">that block&apos;s time</dt>
+          <dd className="figure">{raffle.drawBlockTime?.toISOString() ?? "not resolved yet"}</dd>
 
           <dt className="text-neutral-500">seed</dt>
           <dd className="figure break-all">{raffle.seed ?? "not revealed"}</dd>
@@ -149,12 +195,70 @@ winningTicket  = (material as a big-endian integer mod ticketCount) + 1`}
               <strong>{commitmentHolds ? "yes" : "NO — this does not check out"}</strong>
             </li>
             <li>
+              The block the draw used came after the sale closed:{" "}
+              <strong>
+                {anchorCheck === null
+                  ? "not recorded — this raffle predates the anchored draw, so this cannot be checked here"
+                  : anchorCheck.ok
+                    ? "yes"
+                    : "NO — this block existed while tickets were on sale"}
+              </strong>
+            </li>
+            <li>
               Recomputing from the values above gives ticket{" "}
               <span className="figure">{recomputed?.winningTicket ?? "—"}</span>, and the recorded
               winning ticket is <span className="figure">{raffle.winningTicket ?? "—"}</span>:{" "}
               <strong>{agrees ? "they agree" : "THEY DO NOT AGREE"}</strong>
             </li>
           </ul>
+        </section>
+      )}
+
+      {revealed && raffle.drawHeight !== null && (
+        /**
+         * THE PART THAT TRUSTS NOBODY, INCLUDING US.
+         *
+         * Everything above recomputes from values this server published. That
+         * catches a server whose arithmetic disagrees with its own inputs, which
+         * is worth catching, and it does not catch a server that published a
+         * timestamp the chain never reported.
+         *
+         * These two lookups do. They go to the chain directly and establish the
+         * only two facts the anchor rule needs: the block used is at or after
+         * the published instant, and the block before it is not. Together those
+         * make it THE FIRST such block — which is what makes the draw
+         * deterministic, and what stops us having chosen among several.
+         */
+        <section className="mt-10">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+            Checking the block against the chain yourself
+          </h2>
+          <p className="mt-3 text-neutral-700">
+            The values above are ours. These two lookups are not — they ask{" "}
+            {raffle.chain === "solana" ? "Solana" : "Robinhood Chain"} directly, through any node
+            you like, and are what turns the section above from our claim into your check.
+          </p>
+          <pre className="figure mt-3 overflow-x-auto rounded border border-neutral-300 bg-neutral-50 p-4 text-xs">
+{raffle.chain === "solana"
+  ? `# 1. The block we used. Its blockhash and blockTime must match the values above.
+solana block ${raffle.drawHeight.toString()} --url mainnet-beta
+
+# 2. Every produced slot before it, back to the close, must be EARLIER than
+#    the anchored instant. If one is not, we did not use the first block.
+solana block <that slot> --url mainnet-beta`
+  : `# 1. The block we used. Its hash and timestamp must match the values above.
+cast block ${raffle.drawHeight.toString()} --rpc-url <a Robinhood Chain node>
+
+# 2. The block before it must be EARLIER than the anchored instant.
+#    If it is not, we did not use the first block.
+cast block ${(raffle.drawHeight - 1n).toString()} --rpc-url <a Robinhood Chain node>`}
+          </pre>
+          <p className="mt-3 text-neutral-700">
+            Two things have to hold. The block we used is{" "}
+            <strong>at or after the anchored instant</strong>, and the one before it is{" "}
+            <strong>before</strong> it. The first is what makes the draw unknowable during the
+            sale; the second is what makes it the only block we could have used.
+          </p>
         </section>
       )}
 

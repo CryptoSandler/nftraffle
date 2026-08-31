@@ -60,33 +60,22 @@ export const ROBINHOOD_BLOCK_MS = 101;
 export const ROBINHOOD_BLOCK_MS_MEASURED_ON = "2026-08-31";
 
 /**
- * How much faster than measured the chain is assumed capable of running.
+ * **NO SPEEDUP SAFETY FACTOR, AND NO DRAW MARGIN, ANY MORE.**
  *
- * **THE SAFETY DIRECTION HERE IS THE OPPOSITE OF SOLANA'S, and this factor is
- * the whole reason this constant exists.**
+ * Two constants used to live here: a factor assuming the chain could run twice
+ * as fast as measured, and an hour of margin, which together turned a raffle's
+ * close into an announced BLOCK NUMBER. They are gone with the design that
+ * needed them (docs/decisions.md Q14).
  *
- * On Solana, skipped slots make the chain advance more slowly than the wall
- * clock, so an announced slot arrives later than intended. Later is harmless:
- * the raffle has already closed.
+ * The measurement above is still worth keeping — it is what told us the
+ * announced-height approach was unsound on this chain, and it is the record of
+ * how that was established. But nothing computes with it now. The draw commits
+ * to a wall-clock instant, and `chain/anchor.ts` asks the chain which block came
+ * first at or after it. A chain running at any rate resolves the same instant,
+ * so there is no rate left to be conservative about, and no safety factor that
+ * could be sized wrong.
  *
- * On Robinhood Chain the failure that hurts is the chain running FASTER than
- * measured. The announced block — and therefore its hash — would then arrive
- * while tickets are still selling, and a hash that exists during the sale is
- * the one thing the announcement is designed to prevent.
- *
- * So the margin is computed as if the chain ran at twice the measured rate.
- * Doubling costs a longer wait between close and draw, which is an operator's
- * inconvenience; being wrong in the other direction costs the raffle's whole
- * fairness claim.
+ * That is the point of the redesign rather than a happy side effect: the
+ * previous version was safe by an argument about a measured number, and the
+ * argument held right up until the number moved.
  */
-export const ROBINHOOD_SPEEDUP_SAFETY_FACTOR = 2;
-
-/**
- * How far past a raffle's close the announced block sits, in milliseconds of
- * wall clock.
- *
- * One hour, matching Solana's margin, so the two chains behave the same way
- * from a seller's point of view. What differs is the arithmetic that turns it
- * into a height — see `announceHeight` and the safety factor above.
- */
-export const ROBINHOOD_DRAW_MARGIN_MS = 60 * 60 * 1000;
