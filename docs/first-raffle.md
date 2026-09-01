@@ -33,7 +33,7 @@ domain, or decide that a thing is worth real money.
 | C1–C2 | Watch the first ticket and the balance | **REHEARSED on devnet** | session rehearsed; owner runs for real |
 | D1–D3 | Close, draw, verify as a stranger | **REHEARSED on devnet**, including the anchor refusal before `draw_at` and a hand-recomputed winner | session rehearsed; owner runs for real |
 | E1–E4 | Pay out and mark paid | **REHEARSED on devnet**, including both negatives refusing | session rehearsed; owner runs for real |
-| — | Phantom seen with a real wallet | **NOT DONE** — the preflight is verified through the route, but no browser wallet has been opened (`docs/wallet-warnings.md`) | owner |
+| — | Phantom seen with a real wallet | **SET UP AND WAITING** — server, devnet raffle and the three exact steps are ready in `docs/wallet-warnings.md`; ten minutes, devnet only | owner |
 | — | `SUPPORT_CONTACT` | **NOT DONE** — waits on a domain (`docs/decisions.md` Q6) | owner |
 
 **Everything a session can close is closed.** What is left divides into three

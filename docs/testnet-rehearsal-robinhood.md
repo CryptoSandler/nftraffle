@@ -58,6 +58,49 @@ cast --version
 ```
 
 `cast` is this runbook's `solana` CLI. Everything below uses it or `curl`.
+Installation is a machine prerequisite — see `docs/deploy.md`.
+
+**Every `cast` invocation in this document was verified on 2026-09-01** against
+Foundry 1.8.1 and the live testnet, without writing to any chain. `cast estimate`
+was used to check the shape of the two `cast send` forms: it runs the same call
+against a node and returns gas or the revert, so a wrong ABI signature or a bad
+flag fails there rather than after a transaction is broadcast.
+
+| Invocation | How it was verified | Result |
+|---|---|---|
+| `cast wallet new` | run | keypair produced |
+| `cast wallet sign --private-key $K "<msg>"` | run, then the signature verified by our own `verifyPayerBinding` | **accepted, correct address recovered** |
+| `cast call <c> "ownerOf(uint256)(address)" <id>` | run against testnet | returns the holder |
+| `cast block <n>` | run against testnet | number, hash, timestamp |
+| `cast send <to> --value <x>ether` | shape checked with `cast estimate` | gas returned; from an empty wallet, `insufficient funds for gas * price + value` |
+| `cast send <c> "transferFrom(address,address,uint256)" …` | shape checked with `cast estimate` on four contracts | gas returned on all four |
+| `--json` on `cast send` | flag present | the runner parses `transactionHash` from it |
+
+**The signing line is the one that mattered.** `cast wallet sign` and our
+`lib/wallet/evm-binding.ts` are two independent EIP-191 implementations, and
+until this they had never been compared — the binding's tests anchored keccak and
+the address derivation against published constants, but nothing outside this
+repository had ever verified a whole signature. It does now. Both argument orders
+work: options before the message, as this document writes it, and message first,
+as `cast`'s own examples show.
+
+### The prize must be TRANSFERABLE — check before anything else
+
+```bash
+cast estimate <contract> "transferFrom(address,address,uint256)" \
+  $SELLER $ESCROW <tokenId> --from $SELLER --rpc-url $RPC
+```
+
+**Expect a gas number.** A revert here means the token cannot be moved at all.
+
+This is not hypothetical: the first ERC-721 picked off this testnet's explorer,
+`GMCards`, reverts with *"NFT transfer is disabled - GMCards are
+non-transferable"*. It is soulbound, and a raffle for it could never pay out.
+
+**The product is already safe from this** — a soulbound token cannot reach escrow,
+so publishing fails and no ticket is ever sold — but the failure arrives after
+the listing fee has been sent, and it reads as a deposit problem rather than as a
+property of the token. One estimate beforehand saves that.
 
 ### Three wallets, new and exclusive to this project
 

@@ -90,6 +90,86 @@ will not know to.
 
 ---
 
+## The rehearsal, set up and ready to run
+
+**Everything is prepared. Three steps, about ten minutes, devnet only — no
+mainnet money at any point.**
+
+This is the only outstanding item on `docs/first-raffle.md` that could still find
+a BUG rather than needing a decision, which is why it is worth doing first.
+
+### Step 0 — start the server (one command)
+
+```bash
+cd ~/proyectos/nftraffle
+cp .env.rehearsal .env.local && npm run build && npm start
+```
+
+Then open **http://localhost:3000/r/dmxxxgb4-mti7361j** — *Concentric No. 3*,
+0.05 SOL a ticket, 20 tickets, open until **2026-09-15**. A real devnet raffle
+with a real prize in escrow, listed 2026-09-01 for this.
+
+The page must say **"Devnet. This deployment settles on Solana devnet."** If it
+does not, `.env.local` is not the rehearsal environment and the server is pointed
+somewhere else — stop before connecting a wallet.
+
+### Step 1 — put Phantom in testnet mode and fund it
+
+Phantom → Settings → **Developer Settings** → **Testnet Mode** on → **Solana
+Devnet**.
+
+```bash
+solana airdrop 1 <your Phantom address> --url devnet
+```
+
+**If the faucet answers 429** it is rate-limiting this IP, which it does often.
+The fallback works every time, from the durable devnet seller wallet:
+
+```bash
+solana transfer <your Phantom address> 0.2 \
+  --keypair ~/.config/solana/nftraffle-devnet/seller.json \
+  --url devnet --allow-unfunded-recipient
+```
+
+Confirm: `solana balance <your Phantom address> --url devnet`.
+
+### Step 2 — buy one ticket, and WATCH THE PROMPT
+
+Connect Phantom on that page and buy 1 ticket. When Phantom opens, check four
+things **before** approving — this is the whole point of the exercise:
+
+1. **One signature, yours.** A second signer means something is wrong. Nothing
+   this server builds asks for one, and the Solana Pay reference is attached
+   read-only precisely so it cannot.
+2. **The amount is 0.05 SOL**, matching the page.
+3. **No red "this transaction may be malicious" screen.** If one appears, the
+   preflight did not do its job — that is a bug, and §2 above is how to diagnose
+   it. Do not approve; report it.
+4. **Phantom says Devnet**, agreeing with the page.
+
+Approve, and the page shows your ticket number.
+
+### Step 3 — the step people skip: try it with too little SOL
+
+**This is the one that actually tests the preflight**, and it is why this
+document exists.
+
+In Phantom, switch to a **second account with no devnet SOL** (account picker →
+Add account). Reconnect on the raffle page and try to buy a ticket.
+
+**Expected: the page refuses on its own and Phantom never opens.** The sentence
+is exact:
+
+> You need 0.050005 more SOL for this — the ticket plus the network fee.
+
+**If Phantom opens at all, the preflight is not running — that is the bug this
+step exists to find.** A wallet showing a warning is not the failure; us handing
+it a transaction that cannot succeed is.
+
+*Both branches were verified through the route on 2026-09-01 against this exact
+raffle (the table below), but neither has been seen with a wallet actually open.
+That is the part only a person with Phantom can do.*
+
 ## Before any change to the money path: rehearse with a real wallet
 
 **A green suite does not tell you what a wallet does.** Every test in this

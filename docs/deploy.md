@@ -10,6 +10,38 @@ the checklist for when the owner's pieces exist.
 
 ---
 
+## 0. What the machine needs installed 🧑
+
+Everything below is a tool a person installs once, not a variable. A session can
+use them; it cannot install them without being asked.
+
+| Tool | For | Check |
+|---|---|---|
+| Node 20+ and npm | everything | `node --version` |
+| `solana` CLI | the devnet rehearsal: funding, transfers, balances | `solana --version` |
+| `mplx` (Metaplex CLI) | minting and moving Core assets on devnet | `mplx --version` |
+| **Foundry (`cast`)** | **the Robinhood testnet rehearsal — every chain read and write** | `cast --version` |
+| `psql` or any `pg` client | the SQL steps in both rehearsals | — |
+| Docker | only if you run the local Postgres rather than a Neon branch | `docker ps` |
+
+**Foundry, installed 2026-09-01 on this machine** (`cast 1.8.1`):
+
+```bash
+curl -L https://foundry.paradigm.xyz | sh
+~/.foundry/bin/foundryup
+export PATH="$PATH:$HOME/.foundry/bin"     # add to your shell profile
+```
+
+`foundryup` installs into `~/.foundry/bin` and does **not** add itself to your
+`PATH` — the installer prints the export line and leaves it to you. A session
+that calls `cast` without that on `PATH` will report it missing on a machine
+where it is installed, which is a confusing five minutes.
+
+**Why it is a hard prerequisite rather than a convenience.**
+`docs/testnet-rehearsal-robinhood.md` does every chain read and every chain write
+through `cast`, and `npm run rehearse:robinhood -- --check` refuses to start
+without it — before touching any chain, along with the wallets and the RPC.
+
 ## 1. Neon 🧑 then 🤖
 
 🧑 **Create the project.** Region closest to the Vercel region. Three branches,
