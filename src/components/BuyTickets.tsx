@@ -190,7 +190,7 @@ export function BuyTickets({
                     type="button"
                     disabled={connecting}
                     onClick={() => connect(wallet).catch((e) => setPhase({ step: "error", message: walletErrorMessage(e) }))}
-                    className="rounded border border-rule px-3 py-1 text-sm disabled:border-rule disabled:bg-panel disabled:text-quiet"
+                    className="control text-sm"
                   >
                     {wallet.name}
                   </button>
@@ -211,13 +211,13 @@ export function BuyTickets({
             max={ticketsRemaining}
             value={quantity}
             onChange={(e) => setQuantity(Math.max(1, Number(e.target.value) || 1))}
-            className="figure w-24 rounded border border-rule px-3 py-2"
+            className="control figure w-24"
           />
           <button
             type="button"
             onClick={buy}
             disabled={phase.step === "working"}
-            className="ml-3 rounded bg-ink px-4 py-2 text-ground disabled:border-rule disabled:bg-panel disabled:text-quiet"
+            className="control-primary ml-3"
           >
             {phase.step === "working" ? "Working…" : "Buy"}
           </button>

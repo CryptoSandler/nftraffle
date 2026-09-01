@@ -174,15 +174,98 @@ points, ticket counts, slot numbers — and proportional digits make that a chor
 The numeric face is tabular and it is used for **every figure without exception**,
 including inside sentences.
 
-## 4. Form, 5. Layout, 6. Motion — direction
+## 4. Form — NORMATIVE
 
-Deferred until §2 and §3 are settled and measured. Writing them now would be
-writing three documents that have to agree with a palette that does not exist.
+Built 2026-09-01 over the merged palette. Three shapes and no others, so the
+vocabulary is learned once.
 
-One rule that survives regardless, because it is about honesty rather than taste:
-**the countdown and the ticket counter are never animated in a way that implies
-motion they do not have.** A number that eases toward its new value reads as live
-when it is polled. Show the real cadence.
+| Class | What it is | Border | Background | Text |
+|---|---|---|---|---|
+| `.control` | anything you can act on | `edge` | `ground` | `ink` |
+| `.control-primary` | the one action a screen is chiefly about | `ink` | `ink` | `ground` |
+| `.control-link` | an action that must not compete: sign out, cancel | none | none | `ink`, underlined |
+
+**It was written as two and the source had three.** `.control-link` is a real
+pattern — a bordered button for "Sign out" gives it more weight than it deserves
+— and a document that undercounts what the code needs is one people route around
+rather than follow. It is still a `<button>`, so it still gets the focus ring
+below; that is precisely why it is not an `<a>`, because a link that performs an
+action is a lie to a screen reader.
+
+Radius `4px`, padding `0.375rem 0.75rem`, on both. A control that needs a
+different size gets a width utility, never a different padding — a screen with
+three button heights on it reads as three different products.
+
+**Every control borders with `edge`, never `rule`.** This was wrong on every
+input and secondary button before this pass: they carried the hairline meant for
+the gaps between rows, at 1.50:1, under the 3:1 WCAG 1.4.11 asks of a control's
+boundary. `edge` exists for exactly this and was measured for it (§2).
+
+**Disabled is token-based, never `opacity`.** A composited control has no
+measured contrast, and §2's table stops describing it.
+
+### Focus
+
+**There was no focus styling at all before this pass** — the surfaces looked
+considered and a person using a keyboard could not tell where they were. That is
+not a polish item: accessibility basics are one of the four things this project
+never simplifies away.
+
+`:focus-visible`, never `:focus`, so a mouse click draws no ring — making it do
+so is why people disable focus styles altogether. The ring is **2px of `ink`
+with a 2px offset**, and the offset is load-bearing: without it the ring lands on
+the control's own border and the two read as one thicker line.
+
+**The ring is `ink` and not the accent**, and this is the most tempting exception
+to §2's one-job rule there is. `ink` on `ground` is the highest-contrast pair in
+the palette (17.90:1 light, 16.45:1 dark), which is what a focus ring should be
+anyway.
+
+## 5. Layout — NORMATIVE
+
+**Two page widths, chosen by how the page is read.** `max-w-3xl` for scanning a
+list; `max-w-2xl` for reading one thing. Nothing else.
+
+**Two repeating patterns, and everything is one of them:**
+
+1. **The listing row** — a 64px square image, then a title, a meta line, and the
+   clock. Fixed image size across every listing surface, so rows align down the
+   page whether or not the images loaded.
+2. **The fact list** — a two-column grid, label in `quiet` and value in `ink`,
+   with every value in the tabular face. It is what the raffle page, the verify
+   page and the payout queue all use, because they are all the same thing: a
+   list of things somebody may need to check.
+
+**One vertical rhythm.** Sections are separated by `mt-10`, blocks inside a
+section by `mt-3`, and rows by their own padding. Three numbers, so a page that
+needs a fourth is a page doing something it should not.
+
+**Nothing is centred except the page itself.** Centred text in a column of
+figures makes a column that cannot be scanned, and every screen here is
+ultimately a column of figures.
+
+## 6. Motion — NORMATIVE
+
+**Almost none, and the exceptions are named.**
+
+The only transition in this product is `120ms ease-out` on `background-color`,
+`border-color` and `color`, and only on things you can interact with. Below about
+100ms a transition is not perceived as motion; above about 200ms it is perceived
+as waiting.
+
+**Nothing animates a number.** Not the countdown, not the ticket counter, not a
+balance. A figure that eases toward its new value reads as live when it is polled
+once a second, and that is a lie about the cadence — the rule §2's register rests
+on. The countdown re-renders once a second and changes instantly, because that is
+what it actually does.
+
+**No skeletons, no shimmer, no spinners on data that is already there.** A
+placeholder that pulses implies something is arriving. The image placeholder says
+`no image` and stops, because for that asset nothing is arriving.
+
+**`prefers-reduced-motion: reduce` is honoured globally**, and it is not a
+preference weighed against ours: somebody who asked for less motion has usually
+asked because motion makes them ill.
 
 ## 7. Invariants — direction
 

@@ -95,3 +95,121 @@ body {
  * measured contrast into an unmeasured one, and every ratio in DESIGN.md §2
  * would stop meaning anything. Use `--quiet`.
  */
+
+/**
+ * FOCUS. DESIGN.md §4.
+ *
+ * **There was none at all before this**, which is the kind of gap a palette pass
+ * creates and then hides: the surfaces looked considered, and a person using a
+ * keyboard could not tell where they were. Accessibility basics are one of the
+ * four things this project never simplifies away, so this is not a polish item.
+ *
+ * `:focus-visible`, not `:focus` — a mouse click should not draw a ring, and
+ * making it do so is why people disable focus styles altogether.
+ *
+ * **The ring is `ink`, not the accent.** The accent means the clock and nothing
+ * else (docs/decisions.md Q19), and a focus ring is the most tempting exception
+ * there is. `ink` on `ground` is 17.90:1 in light and 16.45:1 in dark — the
+ * highest-contrast pair in the palette, which is what a focus ring should be.
+ *
+ * The offset is what keeps it legible against a control that already has a
+ * border: without it the ring and the border sit on the same pixel and read as
+ * one slightly thicker line.
+ */
+:where(a, button, input, select, textarea, summary):focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/**
+ * CONTROLS. DESIGN.md §4.
+ *
+ * Two shapes and no others, so a person learns the vocabulary once:
+ * `.control` is anything you can act on, `.control-primary` is the one action a
+ * screen is chiefly about.
+ *
+ * **Both border with `--edge`, never `--rule`.** That was wrong everywhere
+ * before this pass: inputs and buttons carried the hairline meant for the gaps
+ * between rows, at 1.50:1 — under the 3:1 WCAG 1.4.11 asks of a control's
+ * boundary. `--edge` exists for exactly this and was measured for it.
+ *
+ * **The primary action is `ink` on `ground`**, which is the cost of the accent
+ * having one job, taken deliberately rather than worked around.
+ */
+.control {
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  padding: 0.375rem 0.75rem;
+  background: var(--ground);
+  color: var(--ink);
+}
+
+.control-primary {
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  padding: 0.375rem 0.75rem;
+  background: var(--ink);
+  color: var(--ground);
+}
+
+/**
+ * The third shape, and it exists because the code needed it.
+ *
+ * An action that must NOT compete with the page — signing out, cancelling — and
+ * that a bordered button would give more weight than it deserves. Writing "two
+ * shapes and no others" while the source had three would have been a rule people
+ * route around rather than follow.
+ *
+ * It is still a `<button>`, so it still gets the focus ring above. That is the
+ * whole reason it is not an `<a>`: it performs an action, and a link that
+ * performs an action is a lie to a screen reader.
+ */
+.control-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.control:disabled,
+.control-primary:disabled {
+  /* Token-based, never `opacity`: a composited control has no measured contrast. */
+  background: var(--panel);
+  border-color: var(--rule);
+  color: var(--quiet);
+  cursor: not-allowed;
+}
+
+/**
+ * MOTION. DESIGN.md §6.
+ *
+ * The only transition in this product, and it is on interaction affordances
+ * rather than on data. A number that eases toward its new value reads as live
+ * when it is polled once a second, which is a lie about the cadence.
+ *
+ * 120ms because below about 100ms a transition is not perceived as motion and
+ * above about 200ms it is perceived as waiting.
+ */
+.control,
+.control-primary,
+a {
+  transition: background-color 120ms ease-out, border-color 120ms ease-out, color 120ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /*
+   * Somebody who has asked for less motion has usually asked because motion
+   * makes them ill. Honouring it is not a preference we weigh against ours.
+   */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

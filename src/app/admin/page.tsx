@@ -47,9 +47,9 @@ export default async function AdminPage() {
             name="token"
             type="password"
             autoComplete="current-password"
-            className="w-full rounded border border-rule px-3 py-2"
+            className="control w-full"
           />
-          <button className="rounded bg-ink px-4 py-2 text-ground" type="submit">
+          <button className="control-primary" type="submit">
             Sign in
           </button>
         </form>
@@ -67,7 +67,7 @@ export default async function AdminPage() {
       <header className="flex items-baseline justify-between">
         <h1 className="text-xl font-semibold">Admin</h1>
         <form action="/api/admin/session?_method=DELETE" method="post">
-          <button className="text-sm underline underline-offset-4" type="submit">
+          <button className="control-link text-sm" type="submit">
             Sign out ({label})
           </button>
         </form>
@@ -97,7 +97,7 @@ export default async function AdminPage() {
                   method="post"
                   className="mt-2"
                 >
-                  <button className="rounded border border-rule px-3 py-1 text-sm" type="submit">
+                  <button className="control text-sm" type="submit">
                     {/* Disabled by the server, not here: a raffle that sold
                         nothing has no winner, and `recordDraw` refuses it. */}
                     Reveal and draw
@@ -171,15 +171,15 @@ export default async function AdminPage() {
                     <input
                       name="prizeSignature"
                       placeholder="Prize transfer signature"
-                      className="figure w-full rounded border border-rule px-3 py-2 text-sm"
+                      className="control figure w-full text-sm"
                     />
                     <input
                       name="proceedsSignature"
                       placeholder="Proceeds transfer signature"
-                      className="figure w-full rounded border border-rule px-3 py-2 text-sm"
+                      className="control figure w-full text-sm"
                     />
                     <button
-                      className="rounded border border-rule px-3 py-1 text-sm"
+                      className="control text-sm"
                       type="submit"
                     >
                       {/* Both are checked on chain before this is accepted.

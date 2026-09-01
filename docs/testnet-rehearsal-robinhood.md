@@ -255,10 +255,18 @@ nobody.
 **This is where Robinhood diverges from Solana**: the order will not open
 without a signature proving the buyer controls the address it names.
 
+**`<the binding message>` was a placeholder, not a recipe, and this step was
+therefore NOT executable as written** — the same defect as 3b, which described a
+sequence the create route refuses. The message has to be byte-identical to the
+one the server rebuilds, and "build it the same way `payerBindingMessage` does"
+is a reading comprehension exercise with a 400 at the end of it.
+
+`scripts/robinhood-rehearsal.mts` imports that exact function and signs with it,
+so the message signed is the message verified. Use it rather than hand-rolling:
+
 ```bash
-# The message the server will rebuild and verify. Build it the same way
-# `payerBindingMessage` does, or take it from the browser panel's prompt.
-cast wallet sign --private-key $BUYER_KEY "<the binding message>"
+npm run rehearse:robinhood -- --check    # prove the ground first
+npm run rehearse:robinhood               # runs this step and every other one
 ```
 
 ```bash
@@ -398,8 +406,14 @@ only block we could have used.
 
 ### Negative 5b — the seed is hidden before the draw
 
+**`$OTHER_SLUG` is the raffle from 3b**, which is still `draft` and therefore
+still has an unrevealed seed. Naming it matters: the first version of this line
+used a variable nothing had ever set, so the command silently checked
+`/r//verify` and a `0` would have read as a failure of the seed rule rather than
+of the recipe.
+
 ```bash
-curl -s $API/r/$OTHER_SLUG/verify | grep -c "not revealed"   # expect 1
+curl -s $API/r/$SLUG_3B/verify | grep -c "not revealed"   # expect 1
 ```
 
 ### Negative 5c — a draw anchored before the close is impossible
@@ -433,7 +447,24 @@ refusal is the feature** — the public page shows this mark to the person who d
 
 ### Negative 6a — the prize sent to the wrong wallet
 
-**Expect** `prize_wrong_recipient`.
+Send the prize out of escrow to `$IMPOSTOR` instead of the winner, then try to
+mark the raffle paid.
+
+**Expect** `409`, `prize_wrong_recipient`.
+
+**THEN PUT IT BACK, before anything else.** This negative moves a real token to a
+wallet that is not the winner's, and the real payout below cannot be made until
+it returns:
+
+```bash
+cast send <contract> "transferFrom(address,address,uint256)" \
+  $IMPOSTOR $ESCROW <tokenId> --private-key $IMPOSTOR_KEY --rpc-url $RPC
+```
+
+The first version of this check said only "Expect `prize_wrong_recipient`" and
+left the prize with the impostor. That is not a check, it is a trap — and it is
+the same class of defect as 3b and 4d: a recipe that cannot be followed to the
+end as written.
 
 ### Negative 6b — the seller underpaid
 
@@ -472,7 +503,27 @@ refusal is the feature** — the public page shows this mark to the person who d
 
 ## 7a. First run — 2026-08-31
 
-**Status: NOT GREEN. Nine checks passed, thirteen are NOT RUN.** The gate in
+**Status: NOT GREEN. Thirteen checks passed, thirteen are NOT RUN** — and the
+thirteen are now runnable with one command the moment the wallets exist:
+
+```bash
+npm run rehearse:robinhood -- --check   # what is missing, and nothing written
+npm run rehearse:robinhood              # the whole sequence, ~30 minutes
+```
+
+The runner refuses before touching any chain if a variable, `cast`, the RPC or
+the server is missing, and it names each one. A positive check that fails stops
+the run rather than reporting later checks that could not have meant anything.
+Its waits are real — 130 seconds before 4d, and the full close-plus-anchor before
+the draw — because both of those produced false passes when they were rushed.
+
+**Its four binding negatives were run on 2026-09-01 and pass**, with the control:
+they need no gas, so they were the only part of the sequence that could be
+verified before the wallets arrive.
+
+**Original status below.**
+
+**Nine checks passed, thirteen are NOT RUN.** The gate in
 `docs/decisions.md` Q17 is this document passing WHOLE, so the Robinhood surface
 is not through it.
 

@@ -14,6 +14,39 @@ has not been announced yet.
 
 ---
 
+## Where each precondition actually stands
+
+**Updated 2026-09-01.** "Who" is who has to do it: the OWNER, or a working
+session. A session can build, measure and rehearse; it cannot hold a key, buy a
+domain, or decide that a thing is worth real money.
+
+| # | Precondition | State | Who |
+|---|---|---|---|
+| A1 | Escrow funded on mainnet | **NOT DONE** — no mainnet escrow wallet exists | owner |
+| A2 | Two mainnet wallets, new and exclusive | **NOT DONE** — neither created | owner |
+| A3 | Production configured, surfaces open | **NOT DONE, by design** — production has no RPC, wallets or fees, so every money surface is closed and says so | owner |
+| A4 | Production RPC is mainnet and the app agrees | **NOT DONE** — `SOLANA_RPC_URL` unset in Production; the classifier and its refusal are built and tested | owner sets the key; session built the check |
+| A5 | noindex is on | **DONE** — `noindex, nofollow, noarchive` verified on `/` and `/api/rpc` of the live production deployment | session |
+| A6 | Image hosts followed to where they serve | **DONE** — all six probed against mainnet gateways 2026-09-01; allowlist corrected as a result (one host removed, two proven required) | session |
+| B1 | A prize you can afford to lose | **NOT DONE** — a judgement about real money | owner |
+| B2–B4 | Draft, deposit, publish, read as a stranger | **REHEARSED on devnet, end to end** — 14 checks and 10 negatives, all refusing (`docs/devnet-rehearsal.md`) | session rehearsed; owner runs for real |
+| C1–C2 | Watch the first ticket and the balance | **REHEARSED on devnet** | session rehearsed; owner runs for real |
+| D1–D3 | Close, draw, verify as a stranger | **REHEARSED on devnet**, including the anchor refusal before `draw_at` and a hand-recomputed winner | session rehearsed; owner runs for real |
+| E1–E4 | Pay out and mark paid | **REHEARSED on devnet**, including both negatives refusing | session rehearsed; owner runs for real |
+| — | Phantom seen with a real wallet | **NOT DONE** — the preflight is verified through the route, but no browser wallet has been opened (`docs/wallet-warnings.md`) | owner |
+| — | `SUPPORT_CONTACT` | **NOT DONE** — waits on a domain (`docs/decisions.md` Q6) | owner |
+
+**Everything a session can close is closed.** What is left divides into three
+kinds, and none of them is work: keys the owner must hold, money the owner must
+decide to risk, and a domain the owner must buy.
+
+**The one item worth pulling forward** is the Phantom check, because it is the
+only outstanding item that could still find a BUG rather than just needing a
+decision. It needs a browser and a wallet, ten minutes, and devnet — no mainnet
+money. `docs/wallet-warnings.md` has the procedure, including the step people
+skip: deliberately underfund a wallet and confirm the payment is refused before
+Phantom opens at all.
+
 ## A. Before anything is announced
 
 ### A1 — Escrow is funded and reachable

@@ -12,7 +12,8 @@
     "db:migrate": "tsx scripts/migrate.mts --prod",
     "db:migrate:test": "tsx scripts/migrate.mts --test",
     "db:up": "npm run db:migrate:test && npm run db:migrate:preview",
-    "db:migrate:preview": "tsx scripts/migrate.mts --preview"
+    "db:migrate:preview": "tsx scripts/migrate.mts --preview",
+    "rehearse:robinhood": "tsx scripts/robinhood-rehearsal.mts"
   },
   "dependencies": {
     "@noble/curves": "^2.4.0",

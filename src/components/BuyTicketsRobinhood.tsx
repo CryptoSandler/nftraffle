@@ -187,7 +187,7 @@ export function BuyTicketsRobinhood({
               max={Math.max(1, ticketsRemaining)}
               value={quantity}
               onChange={(event) => setQuantity(Math.max(1, Number(event.target.value) || 1))}
-              className="figure mt-1 w-28 rounded border border-rule px-2 py-1"
+              className="control figure mt-1 w-28"
             />
           </label>
 
@@ -209,7 +209,7 @@ export function BuyTicketsRobinhood({
                     type="button"
                     disabled={connecting}
                     onClick={() => connect(wallet).catch(() => undefined)}
-                    className="rounded border border-edge px-3 py-2 text-sm hover:bg-panel disabled:border-rule disabled:bg-panel disabled:text-quiet"
+                    className="control text-sm hover:bg-panel"
                   >
                     Connect {wallet.info.name}
                   </button>
@@ -221,7 +221,7 @@ export function BuyTicketsRobinhood({
               type="button"
               disabled={phase.step === "working" || ticketsRemaining < 1}
               onClick={buy}
-              className="rounded bg-ink px-4 py-2 text-sm text-ground disabled:border-rule disabled:bg-panel disabled:text-quiet"
+              className="control-primary text-sm"
             >
               {phase.step === "working" ? phase.note : `Buy ${quantity}`}
             </button>
