@@ -179,7 +179,6 @@ async function Raffles({ raffles }: { raffles: RaffleSummary[] }) {
                         <Countdown
                           targetMs={raffle.endsAt.getTime()}
                           label="closes in"
-                          elapsedLabel="closed"
                         />
                       </p>
                     )}

@@ -69,7 +69,6 @@ export default async function RafflePage({ params }: PageProps<"/r/[slug]">) {
               <Countdown
                 targetMs={raffle.endsAt.getTime()}
                 label="Closes in"
-                elapsedLabel="Closed — waiting for the draw"
               />
             </p>
           )}
@@ -125,7 +124,6 @@ export default async function RafflePage({ params }: PageProps<"/r/[slug]">) {
               <Countdown
                 targetMs={raffle.drawAt.getTime()}
                 label="drawable in"
-                elapsedLabel="the anchor has passed — the draw can run"
               />
             ) : (
               <span className="figure">{utcInstant(raffle.drawAt)}</span>

@@ -60,8 +60,15 @@ describe("isAllowedImageHost", () => {
      * the entry away as an unexplained extra, so this asserts it is there and
      * the comment on the list says why.
      */
+    // Both networks, because the prefix differs and the wildcard is what makes
+    // one entry cover them. Measured 2026-09-01 on devnet AND on mainnet, with
+    // real ids from the network rather than guessed.
     expect(isAllowedImageHost("https://abc123.devnet-1.datasprite-cdn.com/xyz/")).toBe(true);
+    expect(isAllowedImageHost("https://abc123.mainnet-1.datasprite-cdn.com/xyz/")).toBe(true);
     expect(IMAGE_HOSTS).toContain("https://*.datasprite-cdn.com");
+
+    // And the wildcard is still anchored on a dot boundary.
+    expect(isAllowedImageHost("https://datasprite-cdn.com.attacker.test/x")).toBe(false);
   });
 
   it("every entry on the list is https and parses", () => {

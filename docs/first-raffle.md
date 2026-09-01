@@ -114,23 +114,39 @@ whether the host redirected, and to where. What matters is whether the host in
 | Host probed | Final host | Consequence for the list |
 |---|---|---|
 | `arweave.net` | `<hash>.arweave.net` | `https://*.arweave.net` is REQUIRED, not decoration |
-| `gateway.irys.xyz` | `gateway.irys.xyz` (no redirect on this id) | inconclusive — see below |
+| `gateway.irys.xyz` | `<hash>.mainnet-1.datasprite-cdn.com` | `https://*.datasprite-cdn.com` is REQUIRED |
 | `ipfs.io` | `ipfs.io` | direct |
 | `nftstorage.link` | `ipfs.io` | `https://ipfs.io` is REQUIRED for this gateway too |
 | `cloudflare-ipfs.com` | does not resolve | **removed from the list** |
 | `shdw-drive.genesysgo.net` | same host | direct |
 
-**Two things this table does not settle, said out loud rather than assumed:**
+**Irys was the one line that started out inconclusive, and it is now settled.**
+The first attempt used an Arweave id, which `gateway.irys.xyz` answers `404` to
+without redirecting — so it proved nothing, and said so rather than reading the
+absence of a redirect as evidence there is none. Re-run 2026-09-01 with three
+real mainnet Irys ids, obtained from the network itself rather than guessed:
 
-1. **Irys on mainnet is unverified.** On DEVNET, `gateway.irys.xyz` redirects to
-   `<hash>.devnet-1.datasprite-cdn.com`, which is why that CDN is on the list.
-   The mainnet probe above used an Arweave id, so it 404'd without redirecting
-   and proved nothing. **Re-run it with a real mainnet Irys id before opening
-   production** — if mainnet redirects to a different CDN, every Irys-hosted
-   image will be blocked and the failure will look like missing artwork.
-2. **This table goes stale.** Gateways change where they serve from, and one of
-   them disappeared entirely between being added to this list and being measured.
-   Re-run before production, not once.
+```bash
+# Ask Irys for real mainnet transaction ids, then follow one.
+curl -s -X POST https://uploader.irys.xyz/graphql -H 'content-type: application/json' \
+  -d '{"query":"{ transactions(limit: 3) { edges { node { id } } } }"}'
+curl -sL -o /dev/null -r 0-0 -w "%{num_redirects} -> %{url_effective}\n" \
+  "https://gateway.irys.xyz/<id>"
+```
+
+All three redirected once, to `<content-hash>.mainnet-1.datasprite-cdn.com`.
+**Same domain as devnet, different subdomain prefix** (`mainnet-1` against
+`devnet-1`), so the wildcard `https://*.datasprite-cdn.com` covers both — which
+was already the entry, and is now a measurement rather than an extrapolation
+from devnet.
+
+**Use `-r 0-0`.** Without it, following the redirect downloads the whole object,
+and a large one times out and reports `000` — which looks exactly like an
+unreachable host. A range request asks for one byte and still reveals the chain.
+
+**This table goes stale.** Gateways change where they serve from, and one of them
+disappeared entirely between being added to this list and being measured. Re-run
+before production, not once.
 
 ---
 

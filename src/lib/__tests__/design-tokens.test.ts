@@ -140,6 +140,25 @@ describe("the accent has exactly one job", () => {
     (f) => !f.endsWith("design-tokens.ts") && !f.endsWith("globals.css"),
   );
 
+  /**
+   * Comments stripped before matching, because this test reads CODE.
+   *
+   * Its first version matched the token name anywhere in the file and flagged
+   * `Countdown.tsx` — for a doc comment that states the rule. Documenting a
+   * constraint is exactly what should happen next to the code it governs, and a
+   * guard that punishes it teaches people to stop writing the comment.
+   *
+   * Conservative on purpose: whole block comments, and lines that are entirely a
+   * comment. Nothing that could swallow a line of code.
+   */
+  function code(file: string): string {
+    return readFileSync(file, "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .split("\n")
+      .filter((line) => !/^\s*(\/\/|\*)/.test(line))
+      .join("\n");
+  }
+
   it("appears nowhere in the source except through the .clock class", () => {
     /**
      * THE RULE THE WHOLE PALETTE RESTS ON (docs/decisions.md Q19). An accent
@@ -150,10 +169,9 @@ describe("the accent has exactly one job", () => {
      * no type can express. `globals.css` is excluded because that is where
      * `.clock` legitimately defines it.
      */
-    const offenders = sources.filter((file) => {
-      const text = readFileSync(file, "utf8");
-      return /--accent|text-accent|bg-accent|border-accent/.test(text);
-    });
+    const offenders = sources.filter((file) =>
+      /--accent|text-accent|bg-accent|border-accent/.test(code(file)),
+    );
     expect(offenders.map((f) => f.replace(process.cwd() + "/", ""))).toEqual([]);
   });
 
@@ -168,7 +186,7 @@ describe("the accent has exactly one job", () => {
     // Compositing turns a measured contrast into an unmeasured one, and every
     // ratio in DESIGN.md §2 would stop meaning anything.
     const offenders = sources.filter((file) =>
-      /\b(opacity-[0-9]|text-opacity-|\bfilter:\s*(?!none))/.test(readFileSync(file, "utf8")),
+      /\b(opacity-[0-9]|text-opacity-|\bfilter:\s*(?!none))/.test(code(file)),
     );
     expect(offenders.map((f) => f.replace(process.cwd() + "/", ""))).toEqual([]);
   });

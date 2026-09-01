@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { formatRemaining, remaining, utcInstant } from "../lib/countdown";
+import { formatRemaining, remaining, utcInstant, type Remaining } from "../lib/countdown";
 
 /**
  * A clock that ticks, with the instant it is counting to beside it.
@@ -66,29 +66,53 @@ function subscribe(onChange: () => void): () => void {
 const serverSnapshot = () => null;
 const clientSnapshot = () => (tickMs === 0 ? (tickMs = Date.now()) : tickMs);
 
-export function Countdown({
+/**
+ * The markup, with no subscription in it.
+ *
+ * **Split out so the rule below can be asserted on RENDERED HTML** rather than
+ * on the intention behind it. The hook version cannot be: `useSyncExternalStore`
+ * returns null on the server, so a server render never contains a clock at all
+ * and a test of it would pass whatever the rule said.
+ *
+ * **THE RULE: `--accent` is rendered only while a countdown is still running.**
+ * A closed or drawn raffle has no live clock, so it has no accent — the
+ * elapsed label is not recoloured, it is not emitted. What remains is the
+ * status word in the row, in `ink`, and the absolute instant in `quiet`.
+ *
+ * The reason is the same one that gave the accent a single job
+ * (`docs/decisions.md` Q19): a colour that means "time is running out" must not
+ * appear on a raffle where it has already run out, or it stops meaning that and
+ * starts meaning "this row is about time" — which is every row.
+ */
+export function CountdownView({
   targetMs,
   label,
-  elapsedLabel,
+  value,
 }: {
   targetMs: number;
   label: string;
-  elapsedLabel: string;
+  /** Null before hydration: the server has no clock. */
+  value: Remaining | null;
 }) {
-  const nowMs = useSyncExternalStore(subscribe, clientSnapshot, serverSnapshot);
-  const target = new Date(targetMs);
-  const value = nowMs === null ? null : remaining(targetMs, nowMs);
-
   return (
     <span className="inline-flex flex-wrap items-baseline gap-x-3 gap-y-1">
-      {value && (
-        <span className="clock figure text-base">
-          {value.elapsed ? elapsedLabel : `${label} ${formatRemaining(value)}`}
-        </span>
+      {value && !value.elapsed && (
+        <span className="clock figure text-base">{`${label} ${formatRemaining(value)}`}</span>
       )}
       <span className="figure text-xs text-quiet" title="The exact instant, in UTC">
-        {utcInstant(target)}
+        {utcInstant(new Date(targetMs))}
       </span>
     </span>
+  );
+}
+
+export function Countdown({ targetMs, label }: { targetMs: number; label: string }) {
+  const nowMs = useSyncExternalStore(subscribe, clientSnapshot, serverSnapshot);
+  return (
+    <CountdownView
+      targetMs={targetMs}
+      label={label}
+      value={nowMs === null ? null : remaining(targetMs, nowMs)}
+    />
   );
 }

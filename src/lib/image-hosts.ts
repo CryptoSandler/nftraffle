@@ -35,8 +35,10 @@
  *
  * **Every entry below is a MEASURED RESULT, not a guess.** The redirect chain of
  * each host was followed with
- * `curl -sL -o /dev/null -w "%{url_effective}"` on 2026-09-01, and the procedure
- * is written up as a pre-production check in `docs/first-raffle.md` §A6. Two
+ * `curl -sL -o /dev/null -r 0-0 -w "%{url_effective}"` on 2026-09-01, and the
+ * procedure is written up as a pre-production check in `docs/first-raffle.md`
+ * §A6. The range request matters: without it a large object downloads in full
+ * and a timeout reports `000`, which reads exactly like an unreachable host. Two
  * entries exist only because of what that measured:
  *
  *  - `https://*.arweave.net` — `arweave.net/<txid>` redirects to a
@@ -55,6 +57,12 @@
  * `<content-hash>.devnet-1.datasprite-cdn.com/<id>/`, which serves the bytes.
  * With only the gateway listed, a correctly uploaded image rendered as our
  * "no image" placeholder — the failure looked exactly like a missing asset.
+ *
+ * **MAINNET measured the same day, with real mainnet Irys ids taken from the
+ * network rather than guessed:** the same `302`, to
+ * `<content-hash>.mainnet-1.datasprite-cdn.com`. Same domain, different
+ * subdomain prefix, so the wildcard below covers both — a measurement now,
+ * where it was an extrapolation from devnet.
  *
  * **This was found by looking at a screenshot, not by a test**, and no test in
  * this repository could have found it: it is a fact about a third party's HTTP
