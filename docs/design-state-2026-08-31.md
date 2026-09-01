@@ -97,12 +97,23 @@ produces a placeholder rather than a frame the browser then blocks. A plain
 fetch the source on our server, outside every bound `chain/metadata-fetch.ts`
 sets.
 
-**Not proven visually:** the devnet fixtures all point at `example.invalid`, and
-the one real Robinhood token found is fully on-chain with a `data:` image, which
-is dropped by design. So every screenshot shows the placeholder. The
-image-present path is covered by tests (`asset-display.test.ts`,
-`image-hosts.test.ts`) and has not been seen on a screen with a real picture in
-it.
+**Proven visually, 2026-09-01.** An asset was minted on devnet from the durable
+seller wallet with its image and metadata uploaded to Irys, listed as a raffle,
+sold out, drawn, and photographed: `after/01-home.png`, `after/02-raffle.png`
+and `after/03-verify.png` all show the real picture.
+
+**And the negative control holds.** A second asset was minted whose metadata
+resolves normally but whose `image` is on `raw.githubusercontent.com`, which is
+not on the allowlist. The page emits **no `<img>` at all** — the off-list URL
+does not appear anywhere in the markup — and renders the `no image` placeholder.
+That is stronger than the browser blocking it: the request is never made.
+
+**Doing this found a real bug that no test could have.** `gateway.irys.xyz`
+answers `302` and redirects to a CDN host that was not on the list, and `img-src`
+is evaluated against the redirect TARGET as well as the original URL. So a
+correctly uploaded image was blocked and rendered as the placeholder — a failure
+indistinguishable from a missing asset. The redirect target is now on the list,
+with the check to re-run before mainnet written next to it.
 
 **No wordmark.** "nftraffle" is set in the body sans at `text-2xl`. Correct for
 now — §11 forbids baking a placeholder name into an image — but it means the

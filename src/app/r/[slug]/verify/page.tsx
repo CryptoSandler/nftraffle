@@ -8,6 +8,7 @@ import {
 } from "../../../../lib/raffles/draw";
 import { raffleBySlug } from "../../../../lib/raffles/lifecycle";
 import { assetDisplay } from "../../../../lib/chain/asset-display";
+import { AssetImage } from "../../../../components/AssetImage";
 import { utcInstant } from "../../../../lib/countdown";
 import { ticketsFor } from "../../../../lib/raffles/tickets";
 
@@ -94,10 +95,17 @@ export default async function VerifyPage({ params }: PageProps<"/r/[slug]/verify
         Back to the raffle
       </Link>
 
-      <h1 className="mt-6 text-2xl font-semibold tracking-tight">How this draw was computed</h1>
-      {/* Named, so a reader arriving from a link knows which raffle they are
-          checking without decoding a slug. */}
-      <p className="mt-1 text-neutral-600">{asset.name}</p>
+      {/* Named AND shown, so a reader arriving from a link knows which raffle
+          they are checking without decoding a slug. This page is read by
+          somebody who does not believe the result; making them cross-reference
+          a base58 string first is a bad way to start. */}
+      <div className="mt-6 flex items-start gap-4">
+        <AssetImage src={asset.imageUrl} name={asset.name} className="h-16 w-16 shrink-0" />
+        <div className="min-w-0">
+          <h1 className="text-2xl font-semibold tracking-tight">How this draw was computed</h1>
+          <p className="mt-1 text-neutral-600">{asset.name}</p>
+        </div>
+      </div>
 
       <section className="mt-8">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">

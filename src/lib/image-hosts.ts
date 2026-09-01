@@ -24,12 +24,34 @@
  * `chain/asset-display.ts` calls `isAllowedImageHost` before rendering.
  */
 
-/** CSP source expressions. Wildcards are the CSP kind, not globs. */
+/**
+ * CSP source expressions. Wildcards are the CSP kind, not globs.
+ *
+ * **A REDIRECTING GATEWAY NEEDS ITS DESTINATION ON THE LIST TOO.** `img-src` is
+ * evaluated against every URL in a redirect chain, not just the one in the
+ * markup — so allowlisting a host that answers `302` and nothing else is
+ * decorative: the browser follows the redirect, hits a host that is not listed,
+ * and blocks the image.
+ *
+ * Observed 2026-09-01 while proving the image path end to end:
+ * `gateway.irys.xyz/<id>` answers `302` to
+ * `<content-hash>.devnet-1.datasprite-cdn.com/<id>/`, which serves the bytes.
+ * With only the gateway listed, a correctly uploaded image rendered as our
+ * "no image" placeholder — the failure looked exactly like a missing asset.
+ *
+ * **This was found by looking at a screenshot, not by a test**, and no test in
+ * this repository could have found it: it is a fact about a third party's HTTP
+ * behaviour and about a CSP the browser enforces. `curl -sL -w "%{url_effective}"`
+ * on one asset is the check, and it is worth re-running before mainnet — the
+ * devnet CDN hostname above is unlikely to be the mainnet one.
+ */
 export const IMAGE_HOSTS = [
   "https://arweave.net",
   "https://*.arweave.net",
   "https://gateway.irys.xyz",
   "https://*.irys.xyz",
+  // Where gateway.irys.xyz actually serves from. See the note above.
+  "https://*.datasprite-cdn.com",
   "https://ipfs.io",
   "https://*.ipfs.nftstorage.link",
   "https://nftstorage.link",

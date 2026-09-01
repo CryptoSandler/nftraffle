@@ -43,6 +43,27 @@ describe("isAllowedImageHost", () => {
     }
   });
 
+  it("keeps the host a listed gateway REDIRECTS to", () => {
+    /**
+     * THE BUG THIS GUARDS, found by looking at a screenshot rather than by any
+     * test here.
+     *
+     * `img-src` is evaluated against every URL in a redirect chain, not only the
+     * one in the markup. `gateway.irys.xyz/<id>` answers `302` to a
+     * `*.datasprite-cdn.com` host that serves the bytes — so with only the
+     * gateway listed, a correctly uploaded image was blocked by the browser and
+     * rendered as our "no image" placeholder. The failure was indistinguishable
+     * from a missing asset, which is why it survived a green suite.
+     *
+     * No test in this repository could have caught it: it is a fact about a
+     * third party's HTTP behaviour. What a test CAN do is stop somebody tidying
+     * the entry away as an unexplained extra, so this asserts it is there and
+     * the comment on the list says why.
+     */
+    expect(isAllowedImageHost("https://abc123.devnet-1.datasprite-cdn.com/xyz/")).toBe(true);
+    expect(IMAGE_HOSTS).toContain("https://*.datasprite-cdn.com");
+  });
+
   it("every entry on the list is https and parses", () => {
     // The control: a malformed source expression would silently allow nothing
     // and every image would become a placeholder.
