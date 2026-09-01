@@ -30,30 +30,30 @@ export default function NewRafflePage() {
       <h1 className="mt-6 text-2xl font-semibold tracking-tight">List a raffle</h1>
 
       {closed ? (
-        <p className="mt-6 rounded border border-neutral-300 bg-neutral-50 p-4 text-neutral-700">
+        <p className="mt-6 rounded border border-rule bg-panel p-4 text-quiet">
           {closed.message}
         </p>
       ) : (
         <>
-          <p className="mt-4 text-neutral-700">
+          <p className="mt-4 text-quiet">
             You send the NFT to this site&apos;s escrow wallet, and it stays there until the draw.
             Payouts are made by hand — the prize to the winner, the proceeds to you — and both
             transactions are published on the raffle&apos;s page.
           </p>
           <dl className="mt-8 grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm">
-            <dt className="text-neutral-500">Listing fee</dt>
+            <dt className="text-quiet">Listing fee</dt>
             <dd className="figure">
               {listing.ok ? `${chain.formatNative(listing.amount)} ${chain.nativeSymbol}` : "—"}
             </dd>
-            <dt className="text-neutral-500">Platform share of ticket sales</dt>
+            <dt className="text-quiet">Platform share of ticket sales</dt>
             <dd className="figure">{house.ok ? `${house.bps} bps` : "—"}</dd>
           </dl>
-          <p className="mt-4 text-sm text-neutral-600">
+          <p className="mt-4 text-sm text-quiet">
             There is no minimum. The draw runs on whatever sold, so a raffle that sells one ticket
             transfers the prize for one ticket&apos;s price. The next screen shows what you would
             receive at one ticket and at a sell-out before you commit to anything.
           </p>
-          <p className="mt-8 text-neutral-700">
+          <p className="mt-8 text-quiet">
             The listing flow is not built yet. Nothing on this page charges anything, and no asset
             has been asked for.
           </p>

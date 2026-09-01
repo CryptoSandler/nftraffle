@@ -73,24 +73,94 @@ than implying it defends against everything.
 
 ---
 
-## 2. Colour — direction
+## 2. Colour — NORMATIVE
 
-Not built. When it is:
+Built 2026-09-01, after the mechanism stopped moving (see §10, which set exactly
+that condition). The three questions §2 previously left open were put to the
+owner and answered — `docs/decisions.md` Q19 — and this section is those answers
+made into numbers.
 
-The product's emotional register is a **clock running down in public**. That is
-neither the casino register (gold, red, urgency, animation) nor the marketplace
-register (white, grey, restraint). Casino copy on a product that sells chance is
-the fastest way to look like the thing people are right to be suspicious of;
-marketplace neutrality on a raffle product looks like a spreadsheet.
+**The values below are duplicated in `src/lib/design-tokens.ts` and in
+`src/app/globals.css`, and `src/lib/__tests__/design-tokens.test.ts` reads THIS
+DOCUMENT and asserts all three agree.** A palette that lives only in CSS is one
+nobody can argue with; one that lives only in prose is one nobody applies. A hex
+changed in one place fails the suite.
 
-The direction to try: a near-neutral ground with **one** saturated accent that
-means *the clock*, and nothing else. Time remaining, tickets remaining, the draw
-moment. Never a button, never a link, never decoration — an accent that appears
-on ordinary controls stops meaning anything, and this one has exactly one job.
+### The register: an instrument, not a table
 
-Palette values are deliberately absent from this document until they are
-measured. A hex written down before it is tested against its own background is a
-number that will be quoted in good faith and be wrong.
+This product sells chance for money, and the fastest way to look like the thing
+people are right to be suspicious of is to dress like it. So: **zero casino.**
+No gold, no red urgency, no green success, no animation on a number, nothing
+that borrows from gambling marketing.
+
+What it dresses as instead is a **verification instrument** — something you read
+a measurement off. The nearest relative is the "Instrumento" register kolscan
+uses, and the difference is deliberate: that is an instrument for watching other
+people's money move, and this one has exactly one moving part, the clock.
+
+### The tokens
+
+| Token | Light | Dark | What it is for |
+|---|---|---|---|
+| `ground` | `#FAFBFB` | `#0B0F0F` | the page |
+| `panel` | `#F1F4F3` | `#141918` | a raised block: notices, the placeholder frame |
+| `ink` | `#101413` | `#E9EEED` | body text and headings |
+| `quiet` | `#4A5250` | `#A3ADAB` | labels and secondary text |
+| `rule` | `#C9D1CF` | `#2A3231` | hairlines between rows |
+| `edge` | `#7F8A88` | `#636D69` | the border of a control a person can act on |
+| `accent` | `#00514E` | `#5EEADF` | the countdown, and nothing else |
+
+**The accent has one job and it is the clock.** Not buttons, not links, not
+errors, not the buy action. An accent that appears on ordinary controls stops
+meaning anything; this one is the only coloured thing on a page, so the eye goes
+to the number that is running out. **The primary action is `ink` on `ground` —
+black on white** — which is the cost of that rule, accepted rather than
+worked around.
+
+**The hue is a decision, not a preference.** Red and gold are the casino
+register outright. Green reads as "go", and as money. Blue reads as a hyperlink,
+and a countdown is not one. Teal at this darkness reads as measurement — a
+gauge, a marked scale — which is what a countdown is here.
+
+**Dark mode is a real mode, not an inversion.** `prefers-color-scheme` picks it;
+both columns were measured separately, because a palette inverted arithmetically
+lands wherever the arithmetic lands.
+
+### Measured contrast
+
+Every figure below is computed by `contrastRatio()` from the hexes above, and
+the guardian test recomputes them from this table rather than trusting it.
+
+| Mode | Token | on `ground` | on `panel` | Floor | WCAG |
+|---|---|---|---|---|---|
+| light | `ink` | 17.90 | 16.77 | 7:1 | AA AAA |
+| light | `quiet` | 7.75 | 7.26 | 7:1 | AA AAA |
+| light | `accent` | 8.86 | 8.30 | 8:1 | AA AAA |
+| light | `edge` | 3.44 | 3.22 | 3:1 | — |
+| dark | `ink` | 16.45 | 15.16 | 7:1 | AA AAA |
+| dark | `quiet` | 8.37 | 7.72 | 7:1 | AA AAA |
+| dark | `accent` | 13.14 | 12.11 | 8:1 | AA AAA |
+| dark | `edge` | 3.60 | 3.32 | 3:1 | — |
+
+**The floors are stricter than WCAG AA on purpose.** AA is 4.5:1 and is a floor
+for *reading*; this product asks people to make money decisions from figures on
+a screen. §7 sets 7:1 for body and 8:1 for a figure somebody is about to act on,
+and the accent — which is always such a figure — clears 8:1 in both modes.
+
+**`rule` is the one exemption and it is deliberate.** A hairline between two
+rows is decoration: a reader who cannot see it loses nothing, because the row
+below still starts with a name. `edge` is NOT exempt, because it is the boundary
+of something a person clicks, which WCAG 1.4.11 puts at 3:1.
+
+**No text is ever quieted with `opacity` or a `filter`.** Compositing turns a
+measured contrast into an unmeasured one, and every number in this section would
+stop meaning anything.
+
+### What is still not here
+
+**No wordmark** (§11): the name is a placeholder and the domain is not bought.
+The home page has no identity mark, and that is correct until there is a name
+worth setting.
 
 ## 3. Typography — direction
 
@@ -191,10 +261,12 @@ timer reaching zero on a page that happens to be open.
 
 ---
 
-## 10. Why the interface is plain right now
+## 10. Why the interface was plain, and what changed
 
-This is a decision, recorded so nobody reads it as unfinished work and
-"improves" it.
+**Closed 2026-09-01.** The condition this section set has been met, so §2 is
+built and normative. What follows is the original reasoning, kept because it is
+the argument for why the palette arrived when it did rather than earlier — and
+because the same test applies to §3–§6, which are still direction.
 
 The mechanism is not settled enough to dress. The draw's public page, the escrow
 deposit flow and the payout queue are the surfaces that decide whether anyone
@@ -205,6 +277,14 @@ and a considered palette quietly become approximations.
 So: neutral, legible, unstyled beyond what legibility needs, and honest about
 being early. When §2 and §3 are settled and measured, the pass happens once, over
 a mechanism that has stopped changing.
+
+**What actually happened.** The draw's anchor was redesigned on 2026-08-31 and
+the mechanism stopped moving; legibility came first (names, images, a clock) and
+the palette followed once there was real content to measure a palette against.
+Every ratio in §2 was computed rather than chosen, and a guardian test reads this
+document to keep the three copies honest. §4–§6 — form, layout, motion — are
+still direction, and the same rule holds for them: they arrive measured or not at
+all.
 
 ## 11. The name is a placeholder
 

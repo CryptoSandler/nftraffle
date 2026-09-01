@@ -60,7 +60,7 @@ export default async function RafflePage({ params }: PageProps<"/r/[slug]">) {
 
           {/* The status is a word in the document, not a colour and not a timer
               reaching zero (DESIGN.md §9). */}
-          <p className="mt-1 text-neutral-600">
+          <p className="mt-1 text-quiet">
             This raffle is <strong>{raffle.status}</strong>.
           </p>
 
@@ -77,7 +77,7 @@ export default async function RafflePage({ params }: PageProps<"/r/[slug]">) {
       </div>
 
       {raffle.status === "cancelled" && (
-        <p className="mt-4 rounded border border-neutral-300 bg-neutral-50 p-4">
+        <p className="mt-4 rounded border border-rule bg-panel p-4">
           {/* The reason is mandatory in the schema precisely so this can never
               be an empty box shown to people who paid for tickets. */}
           This raffle was cancelled: {raffle.cancelledReason}
@@ -85,41 +85,41 @@ export default async function RafflePage({ params }: PageProps<"/r/[slug]">) {
       )}
 
       <dl className="mt-8 grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm">
-        <dt className="text-neutral-500">Prize</dt>
+        <dt className="text-quiet">Prize</dt>
         {/* The name is the heading; this is the chain-native reference, which is
             what somebody looking it up in an explorer needs. */}
         <dd className="figure break-all">{asset.reference}</dd>
 
-        <dt className="text-neutral-500">Ticket price</dt>
+        <dt className="text-quiet">Ticket price</dt>
         <dd className="figure">
           {chain.formatNative(raffle.ticketPriceNative)} {chain.nativeSymbol}
         </dd>
 
-        <dt className="text-neutral-500">Tickets</dt>
+        <dt className="text-quiet">Tickets</dt>
         {/* The ONLY odds figure any copy here may quote: a count of what sold,
             never a phrased chance (DESIGN.md §8.1). */}
         <dd className="figure">
           {sold} of {raffle.maxTickets} sold
         </dd>
 
-        <dt className="text-neutral-500">Closes</dt>
+        <dt className="text-quiet">Closes</dt>
         {/* Seconds, no milliseconds. The countdown above is for deciding; this
             is for checking, and both are on the page deliberately. */}
         <dd className="figure">{utcInstant(raffle.endsAt)}</dd>
 
-        <dt className="text-neutral-500">Seller</dt>
+        <dt className="text-quiet">Seller</dt>
         <dd className="figure break-all">{raffle.sellerWallet}</dd>
       </dl>
 
       <section className="mt-10">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-quiet">
           The draw
         </h2>
         <dl className="mt-3 grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm">
-          <dt className="text-neutral-500">Commitment</dt>
+          <dt className="text-quiet">Commitment</dt>
           <dd className="figure break-all">{raffle.seedHash}</dd>
 
-          <dt className="text-neutral-500">Entropy anchored to</dt>
+          <dt className="text-quiet">Entropy anchored to</dt>
           <dd>
             {raffle.status === "closed" ? (
               <Countdown
@@ -134,9 +134,9 @@ export default async function RafflePage({ params }: PageProps<"/r/[slug]">) {
 
           {raffle.winnerWallet && (
             <>
-              <dt className="text-neutral-500">Winner</dt>
+              <dt className="text-quiet">Winner</dt>
               <dd className="figure break-all">{raffle.winnerWallet}</dd>
-              <dt className="text-neutral-500">Winning ticket</dt>
+              <dt className="text-quiet">Winning ticket</dt>
               <dd className="figure">{raffle.winningTicket}</dd>
             </>
           )}
@@ -150,24 +150,24 @@ export default async function RafflePage({ params }: PageProps<"/r/[slug]">) {
 
       {raffle.status === "paid" && (
         <section className="mt-10">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-quiet">
             Payout
           </h2>
           {/* Both signatures were verified on chain before this row could say
               "paid" (spec §0.5). The page shows them so a reader can check the
               same thing the server did rather than take our word. */}
           <dl className="mt-3 grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm">
-            <dt className="text-neutral-500">Prize sent</dt>
+            <dt className="text-quiet">Prize sent</dt>
             <dd className="figure break-all">{raffle.prizeSignature}</dd>
-            <dt className="text-neutral-500">Proceeds sent</dt>
+            <dt className="text-quiet">Proceeds sent</dt>
             <dd className="figure break-all">{raffle.proceedsSignature}</dd>
           </dl>
         </section>
       )}
 
-      <section className="mt-10 border-t border-neutral-200 pt-6">
+      <section className="mt-10 border-t border-rule pt-6">
         {raffle.status !== "open" ? (
-          <p className="text-neutral-600">Tickets are no longer on sale for this raffle.</p>
+          <p className="text-quiet">Tickets are no longer on sale for this raffle.</p>
         ) : !buyingClosed ? (
           /*
            * THE CLUSTER IS CLASSIFIED HERE, ON THE SERVER, AND ONLY ITS ANSWER
@@ -207,14 +207,14 @@ export default async function RafflePage({ params }: PageProps<"/r/[slug]">) {
             />
           )
         ) : (
-          <p className="rounded border border-neutral-300 bg-neutral-50 p-4 text-neutral-700">
+          <p className="rounded border border-rule bg-panel p-4 text-quiet">
             {buyingClosed.message}
           </p>
         )}
       </section>
 
       {sold > 0 && (
-        <p className="figure mt-8 text-xs text-neutral-500">
+        <p className="figure mt-8 text-xs text-quiet">
           Sold to date {chain.formatNative(split.grossNative)} {chain.nativeSymbol} · seller receives{" "}
           {chain.formatNative(split.sellerNetNative)} {chain.nativeSymbol} after a{" "}
           {raffle.houseFeeBps} bps platform fee

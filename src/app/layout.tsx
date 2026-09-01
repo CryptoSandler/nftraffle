@@ -64,7 +64,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${inter.variable} ${plexMono.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col bg-white text-neutral-900">{children}</body>
+      <body className="min-h-full flex flex-col bg-ground text-ink">{children}</body>
     </html>
   );
 }

@@ -82,11 +82,11 @@ export function Countdown({
   return (
     <span className="inline-flex flex-wrap items-baseline gap-x-3 gap-y-1">
       {value && (
-        <span className="figure text-base tabular-nums">
+        <span className="clock figure text-base">
           {value.elapsed ? elapsedLabel : `${label} ${formatRemaining(value)}`}
         </span>
       )}
-      <span className="figure text-xs text-neutral-500" title="The exact instant, in UTC">
+      <span className="figure text-xs text-quiet" title="The exact instant, in UTC">
         {utcInstant(target)}
       </span>
     </span>

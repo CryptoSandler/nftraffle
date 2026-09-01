@@ -166,7 +166,7 @@ export function BuyTickets({
          * is why the flag travels with the verdict rather than being inferred
          * here.
          */
-        <p className="rounded border border-neutral-400 bg-neutral-100 p-3 text-sm">
+        <p className="rounded border border-edge bg-panel p-3 text-sm">
           <strong>Devnet.</strong> This deployment settles on Solana devnet. Nothing signed here
           moves real SOL, and nothing bought here is a real ticket.
         </p>
@@ -174,12 +174,12 @@ export function BuyTickets({
 
       {!connection ? (
         <div>
-          <p className="text-neutral-700">
+          <p className="text-quiet">
             Connect a wallet to buy tickets. Payment is a single {nativeSymbol} transfer, verified
             on chain before any ticket is issued.
           </p>
           {wallets.length === 0 ? (
-            <p className="mt-3 text-sm text-neutral-600">
+            <p className="mt-3 text-sm text-quiet">
               No Solana wallet was detected in this browser.
             </p>
           ) : (
@@ -190,7 +190,7 @@ export function BuyTickets({
                     type="button"
                     disabled={connecting}
                     onClick={() => connect(wallet).catch((e) => setPhase({ step: "error", message: walletErrorMessage(e) }))}
-                    className="rounded border border-neutral-300 px-3 py-1 text-sm disabled:opacity-60"
+                    className="rounded border border-rule px-3 py-1 text-sm disabled:border-rule disabled:bg-panel disabled:text-quiet"
                   >
                     {wallet.name}
                   </button>
@@ -211,21 +211,21 @@ export function BuyTickets({
             max={ticketsRemaining}
             value={quantity}
             onChange={(e) => setQuantity(Math.max(1, Number(e.target.value) || 1))}
-            className="figure w-24 rounded border border-neutral-300 px-3 py-2"
+            className="figure w-24 rounded border border-rule px-3 py-2"
           />
           <button
             type="button"
             onClick={buy}
             disabled={phase.step === "working"}
-            className="ml-3 rounded bg-neutral-900 px-4 py-2 text-white disabled:opacity-60"
+            className="ml-3 rounded bg-ink px-4 py-2 text-ground disabled:border-rule disabled:bg-panel disabled:text-quiet"
           >
             {phase.step === "working" ? "Working…" : "Buy"}
           </button>
-          <p className="figure text-xs text-neutral-500">{connection.account.address}</p>
+          <p className="figure text-xs text-quiet">{connection.account.address}</p>
         </div>
       )}
 
-      {phase.step === "working" && <p className="text-sm text-neutral-600">{phase.note}</p>}
+      {phase.step === "working" && <p className="text-sm text-quiet">{phase.note}</p>}
       {phase.step === "done" && (
         <Notice>
           Paid.{" "}
@@ -247,6 +247,6 @@ export function BuyTickets({
 
 function Notice({ children }: { children: React.ReactNode }) {
   return (
-    <p className="rounded border border-neutral-300 bg-neutral-50 p-4 text-neutral-700">{children}</p>
+    <p className="rounded border border-rule bg-panel p-4 text-quiet">{children}</p>
   );
 }

@@ -37,27 +37,27 @@ export default function LaunchPage() {
       <h1 className="mt-6 text-2xl font-semibold tracking-tight">Launch a collection</h1>
 
       {closed ? (
-        <p className="mt-6 rounded border border-neutral-300 bg-neutral-50 p-4 text-neutral-700">
+        <p className="mt-6 rounded border border-rule bg-panel p-4 text-quiet">
           {closed.message}
         </p>
       ) : (
         <>
-          <p className="mt-4 text-neutral-700">
+          <p className="mt-4 text-quiet">
             You sign everything from your own wallet. This site never holds your art, your
             collection authority, or your mint proceeds — buyers pay you directly.
           </p>
           <dl className="mt-8 grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm">
-            <dt className="text-neutral-500">Launch fee</dt>
+            <dt className="text-quiet">Launch fee</dt>
             <dd className="figure">{fee.ok ? `${chain.formatNative(fee.amount)} ${chain.nativeSymbol}` : "—"}</dd>
-            <dt className="text-neutral-500">Platform share of each mint</dt>
+            <dt className="text-quiet">Platform share of each mint</dt>
             <dd className="figure">{share.ok ? `${share.bps} bps` : "—"}</dd>
           </dl>
-          <p className="mt-4 text-sm text-neutral-600">
+          <p className="mt-4 text-sm text-quiet">
             The platform share is charged by the candy machine itself, as a guard on the mint
             instruction. It is our fee, not a network fee — Solana&apos;s own fee is a fraction of
             a cent.
           </p>
-          <p className="mt-8 text-neutral-700">
+          <p className="mt-8 text-quiet">
             The create flow is not built yet. Nothing on this page charges anything.
           </p>
         </>

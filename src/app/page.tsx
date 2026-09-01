@@ -38,7 +38,7 @@ export default async function Home() {
     <main className="mx-auto w-full max-w-3xl px-6 py-16">
       <header className="mb-12">
         <h1 className="text-2xl font-semibold tracking-tight">nftraffle</h1>
-        <p className="mt-2 max-w-xl text-neutral-600">
+        <p className="mt-2 max-w-xl text-quiet">
           Launch a collection on Solana, and sell it by raffle. Every draw publishes the values
           it was computed from, so anyone can recompute the winner.
         </p>
@@ -53,16 +53,16 @@ export default async function Home() {
       </header>
 
       <section className="mb-14">
-        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-neutral-500">
+        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-quiet">
           Raffles
         </h2>
         {raffles.length === 0 ? (
-          <p className="text-neutral-600">No raffles yet.</p>
+          <p className="text-quiet">No raffles yet.</p>
         ) : (
-          <ul className="divide-y divide-neutral-200 border-y border-neutral-200">
+          <ul className="divide-y divide-rule border-y border-rule">
             {raffles.map((raffle) => (
               <li key={raffle.id} className="py-4">
-                <Link className="flex gap-4 hover:bg-neutral-50" href={`/r/${raffle.slug}`}>
+                <Link className="flex gap-4 hover:bg-panel" href={`/r/${raffle.slug}`}>
                   <AssetImage
                     src={displays.get(`${raffle.chain}:${raffle.prizeAsset}`)?.imageUrl ?? null}
                     name={displays.get(`${raffle.chain}:${raffle.prizeAsset}`)?.name ?? raffle.prizeAsset}
@@ -73,12 +73,12 @@ export default async function Home() {
                       <span className="truncate font-medium">
                         {displays.get(`${raffle.chain}:${raffle.prizeAsset}`)?.name ?? raffle.prizeAsset}
                       </span>
-                      <span className="figure shrink-0 text-sm text-neutral-600">
+                      <span className="figure shrink-0 text-sm text-quiet">
                         {adapterFor(raffle.chain).formatNative(raffle.ticketPriceNative)}{" "}
                         {adapterFor(raffle.chain).nativeSymbol}
                       </span>
                     </div>
-                    <p className="mt-1 text-sm text-neutral-600">
+                    <p className="mt-1 text-sm text-quiet">
                       <span className="figure">{raffle.ticketsSold}</span> of{" "}
                       <span className="figure">{raffle.maxTickets}</span> tickets sold ·{" "}
                       {/* The status is a word, never only a countdown reaching zero —
@@ -103,24 +103,24 @@ export default async function Home() {
       </section>
 
       <section>
-        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-neutral-500">
+        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-quiet">
           Collections launched here
         </h2>
         {collections.length === 0 ? (
-          <p className="text-neutral-600">No collections yet.</p>
+          <p className="text-quiet">No collections yet.</p>
         ) : (
-          <ul className="divide-y divide-neutral-200 border-y border-neutral-200">
+          <ul className="divide-y divide-rule border-y border-rule">
             {collections.map((collection) => (
               <li key={collection.id} className="py-4">
-                <Link className="block hover:bg-neutral-50" href={`/c/${collection.chain}/${collection.slug}`}>
+                <Link className="block hover:bg-panel" href={`/c/${collection.chain}/${collection.slug}`}>
                   <div className="flex items-baseline justify-between gap-4">
                     <span className="font-medium">{collection.name}</span>
-                    <span className="figure text-sm text-neutral-600">
+                    <span className="figure text-sm text-quiet">
                       {adapterFor(collection.chain).formatNative(collection.priceNative)}{" "}
                       {adapterFor(collection.chain).nativeSymbol}
                     </span>
                   </div>
-                  <p className="figure mt-1 text-sm text-neutral-600">
+                  <p className="figure mt-1 text-sm text-quiet">
                     {collection.itemsAvailable} items
                   </p>
                 </Link>

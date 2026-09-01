@@ -1,27 +1,97 @@
 @import "tailwindcss";
 
 /**
- * Deliberately minimal. DESIGN.md §10 records why: the mechanism is not settled
- * enough to dress, and a visual system built over moving surfaces gets rebuilt
- * — which is where measured contrast ratios quietly become approximations.
+ * The palette. DESIGN.md §2 is normative and carries the reasoning and the
+ * measured contrast table; this file carries the same hexes as custom
+ * properties, and `src/lib/__tests__/design-tokens.test.ts` reads all three —
+ * the document, `lib/design-tokens.ts`, and this stylesheet — and fails if any
+ * two disagree.
  *
- * There is no palette here on purpose. When §2 and §3 of DESIGN.md are settled,
- * the colours arrive as named tokens in ONE module with a test suite asserting
- * every ratio, the way the sibling project does it. A hex written into this
- * stylesheet now would be the second copy nothing polices, and the first to
- * drift.
+ * **The accent has exactly one job: the countdown** (docs/decisions.md Q19).
+ * There is deliberately no `--accent` use on a button, a link, an error or the
+ * buy action anywhere in this codebase, and a test asserts that too. The primary
+ * action is `--ink` on `--ground`.
+ *
+ * **Dark mode is a real mode, not an inversion.** Both columns were measured
+ * separately against their own ground and panel.
  */
+
+:root {
+  --ground: #FAFBFB;
+  --panel: #F1F4F3;
+  --ink: #101413;
+  --quiet: #4A5250;
+  --rule: #C9D1CF;
+  --edge: #7F8A88;
+  --accent: #00514E;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #0B0F0F;
+    --panel: #141918;
+    --ink: #E9EEED;
+    --quiet: #A3ADAB;
+    --rule: #2A3231;
+    --edge: #636D69;
+    --accent: #5EEADF;
+  }
+}
 
 @theme inline {
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
+
+  /*
+   * Exposed to Tailwind so `text-ink`, `bg-panel`, `border-rule` resolve.
+   *
+   * `--accent` IS DELIBERATELY ABSENT from this list. Exposing it would create
+   * a `text-accent` utility, and the rule that the accent means the countdown
+   * and nothing else (docs/decisions.md Q19) would then rest on nobody reaching
+   * for it. Without the utility there is nothing to reach for: the accent is
+   * reachable only through `.clock` below, which is one grep rather than a
+   * convention.
+   */
+  --color-ground: var(--ground);
+  --color-panel: var(--panel);
+  --color-ink: var(--ink);
+  --color-quiet: var(--quiet);
+  --color-rule: var(--rule);
+  --color-edge: var(--edge);
+}
+
+html {
+  color-scheme: light dark;
+}
+
+body {
+  background: var(--ground);
+  color: var(--ink);
 }
 
 /**
- * Every figure is tabular. Prices, ticket counts, basis points and slot numbers
+ * Every figure is tabular. Prices, ticket counts, basis points and block heights
  * are read down a column, and proportional digits make that a chore.
  */
 .figure {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
+
+/**
+ * The countdown, and the ONLY place `--accent` appears.
+ *
+ * Named rather than applied as a utility so that "what is coloured on this page"
+ * is one grep, and so the rule survives somebody reaching for `text-accent` on a
+ * button — which the guardian test refuses.
+ */
+.clock {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+/**
+ * No text is quieted with `opacity` or a `filter`, anywhere. Compositing turns a
+ * measured contrast into an unmeasured one, and every ratio in DESIGN.md §2
+ * would stop meaning anything. Use `--quiet`.
+ */

@@ -33,6 +33,23 @@
  * decorative: the browser follows the redirect, hits a host that is not listed,
  * and blocks the image.
  *
+ * **Every entry below is a MEASURED RESULT, not a guess.** The redirect chain of
+ * each host was followed with
+ * `curl -sL -o /dev/null -w "%{url_effective}"` on 2026-09-01, and the procedure
+ * is written up as a pre-production check in `docs/first-raffle.md` §A6. Two
+ * entries exist only because of what that measured:
+ *
+ *  - `https://*.arweave.net` — `arweave.net/<txid>` redirects to a
+ *    content-hash SUBDOMAIN. Without the wildcard, every Arweave image is
+ *    blocked.
+ *  - `https://ipfs.io` — `nftstorage.link` redirects here. Without it, that
+ *    gateway is decorative.
+ *
+ * And one entry was REMOVED by it: `cloudflare-ipfs.com` no longer resolves at
+ * all — Cloudflare discontinued the gateway — so it could never have served an
+ * image. A dead host on an allowlist is not harmless; it is a line that makes
+ * the list look considered while doing nothing.
+ *
  * Observed 2026-09-01 while proving the image path end to end:
  * `gateway.irys.xyz/<id>` answers `302` to
  * `<content-hash>.devnet-1.datasprite-cdn.com/<id>/`, which serves the bytes.
@@ -52,10 +69,10 @@ export const IMAGE_HOSTS = [
   "https://*.irys.xyz",
   // Where gateway.irys.xyz actually serves from. See the note above.
   "https://*.datasprite-cdn.com",
+  // Required for nftstorage.link too: that host 302s here (measured 2026-09-01).
   "https://ipfs.io",
   "https://*.ipfs.nftstorage.link",
   "https://nftstorage.link",
-  "https://cloudflare-ipfs.com",
   "https://shdw-drive.genesysgo.net",
 ] as const;
 

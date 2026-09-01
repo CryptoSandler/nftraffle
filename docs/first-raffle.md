@@ -87,6 +87,51 @@ curl -sI -X POST https://<prod>/api/rpc | grep -i x-robots-tag
 Both must answer `noindex, nofollow, noarchive`. The first raffle is not the
 moment to be indexed.
 
+### A6 — Every image host is followed to where it actually serves
+
+**`img-src` is judged against the REDIRECT TARGET, not the URL in the markup.**
+So an allowlist entry that only redirects is decorative: the browser follows the
+`302`, lands on a host that is not listed, and blocks the image — which renders
+as our "no image" placeholder and looks exactly like a missing asset.
+
+This is not hypothetical. It happened on devnet on 2026-09-01 with a correctly
+uploaded image, and it survived a green test suite, because no test here can know
+a third party's HTTP behaviour.
+
+**Run this against the MAINNET gateways before opening production**, with a real
+content id for each host:
+
+```bash
+curl -sL -o /dev/null -m 30 -w "%{http_code}  %{url_effective}\n" "<a real URL on that host>"
+```
+
+**Read the final host, not the status.** A `404` is fine — it still reveals
+whether the host redirected, and to where. What matters is whether the host in
+`url_effective` is on `IMAGE_HOSTS` in `src/lib/image-hosts.ts`.
+
+**Measured 2026-09-01**, and the allowlist is the result:
+
+| Host probed | Final host | Consequence for the list |
+|---|---|---|
+| `arweave.net` | `<hash>.arweave.net` | `https://*.arweave.net` is REQUIRED, not decoration |
+| `gateway.irys.xyz` | `gateway.irys.xyz` (no redirect on this id) | inconclusive — see below |
+| `ipfs.io` | `ipfs.io` | direct |
+| `nftstorage.link` | `ipfs.io` | `https://ipfs.io` is REQUIRED for this gateway too |
+| `cloudflare-ipfs.com` | does not resolve | **removed from the list** |
+| `shdw-drive.genesysgo.net` | same host | direct |
+
+**Two things this table does not settle, said out loud rather than assumed:**
+
+1. **Irys on mainnet is unverified.** On DEVNET, `gateway.irys.xyz` redirects to
+   `<hash>.devnet-1.datasprite-cdn.com`, which is why that CDN is on the list.
+   The mainnet probe above used an Arweave id, so it 404'd without redirecting
+   and proved nothing. **Re-run it with a real mainnet Irys id before opening
+   production** — if mainnet redirects to a different CDN, every Irys-hosted
+   image will be blocked and the failure will look like missing artwork.
+2. **This table goes stale.** Gateways change where they serve from, and one of
+   them disappeared entirely between being added to this list and being measured.
+   Re-run before production, not once.
+
 ---
 
 ## B. Listing it

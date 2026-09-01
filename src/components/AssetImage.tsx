@@ -37,11 +37,11 @@ export function AssetImage({
   if (!src || failed) {
     return (
       <div
-        className={`flex items-center justify-center border border-neutral-300 bg-neutral-50 ${className}`}
+        className={`flex items-center justify-center border border-rule bg-panel ${className}`}
         role="img"
         aria-label={`No image available for ${name}`}
       >
-        <span className="figure px-2 text-center text-[10px] leading-tight text-neutral-500">
+        <span className="figure px-2 text-center text-[10px] leading-tight text-quiet">
           no image
         </span>
       </div>
@@ -53,7 +53,7 @@ export function AssetImage({
     <img
       src={src}
       alt={name}
-      className={`border border-neutral-200 object-cover ${className}`}
+      className={`border border-rule object-cover ${className}`}
       loading="lazy"
       decoding="async"
       // Never send our URL to a third-party image host.

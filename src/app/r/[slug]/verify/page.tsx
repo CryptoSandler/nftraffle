@@ -103,15 +103,15 @@ export default async function VerifyPage({ params }: PageProps<"/r/[slug]/verify
         <AssetImage src={asset.imageUrl} name={asset.name} className="h-16 w-16 shrink-0" />
         <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight">How this draw was computed</h1>
-          <p className="mt-1 text-neutral-600">{asset.name}</p>
+          <p className="mt-1 text-quiet">{asset.name}</p>
         </div>
       </div>
 
       <section className="mt-8">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-quiet">
           The method
         </h2>
-        <p className="mt-3 text-neutral-700">
+        <p className="mt-3 text-quiet">
           When this raffle was created, the server generated a random 32-byte seed, published{" "}
           <code className="figure">sha256(seed)</code>, and published an{" "}
           <strong>instant</strong> — ten minutes after the sale closes — that the draw&apos;s
@@ -138,7 +138,7 @@ export default async function VerifyPage({ params }: PageProps<"/r/[slug]/verify
            * us impossible, and not provably unknowable to the party that orders
            * the blocks.
            */
-          <p className="mt-3 rounded border border-neutral-300 bg-neutral-50 p-3 text-neutral-700">
+          <p className="mt-3 rounded border border-rule bg-panel p-3 text-quiet">
             <strong>One thing to be clear about on this chain.</strong> Robinhood Chain orders its
             blocks through a single sequencer. So &ldquo;the hash could not be known in
             advance&rdquo; is a statement about <em>us</em>: we commit to the seed before that
@@ -148,63 +148,63 @@ export default async function VerifyPage({ params }: PageProps<"/r/[slug]/verify
             left for you to work out.
           </p>
         )}
-        <p className="mt-3 text-neutral-700">
+        <p className="mt-3 text-quiet">
           It is an instant rather than a block number deliberately. A block number has to be
           predicted from how fast the chain is running, and that prediction is wrong by however much
           the real rate differs from the assumed one — early, if the chain is faster than assumed.
           A time is not a prediction: a chain running at any speed still resolves the same instant.
         </p>
-        <p className="mt-3 text-neutral-700">
+        <p className="mt-3 text-quiet">
           When the raffle closed, the seed was published and that block&apos;s hash was read. The
           winner is:
         </p>
-        <pre className="figure mt-3 overflow-x-auto rounded border border-neutral-300 bg-neutral-50 p-4 text-xs">
+        <pre className="figure mt-3 overflow-x-auto rounded border border-rule bg-panel p-4 text-xs">
 {`material       = sha256(seedHash + seed + blockhash + raffleId)
 winningTicket  = (material as a big-endian integer mod ticketCount) + 1`}
         </pre>
-        <p className="mt-3 text-neutral-700">
+        <p className="mt-3 text-quiet">
           The four values are concatenated as text, in that order, with no separator. Tickets are
           numbered from 1 in the order they were sold.
         </p>
       </section>
 
       <section className="mt-10">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-quiet">
           This raffle&apos;s values
         </h2>
         <dl className="mt-3 grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm">
-          <dt className="text-neutral-500">raffleId</dt>
+          <dt className="text-quiet">raffleId</dt>
           <dd className="figure break-all">{raffle.id}</dd>
 
-          <dt className="text-neutral-500">seedHash</dt>
+          <dt className="text-quiet">seedHash</dt>
           <dd className="figure break-all">{raffle.seedHash}</dd>
 
-          <dt className="text-neutral-500">anchored to (published at creation)</dt>
+          <dt className="text-quiet">anchored to (published at creation)</dt>
           <dd className="figure">{utcInstant(raffle.drawAt)}</dd>
 
-          <dt className="text-neutral-500">closed at</dt>
+          <dt className="text-quiet">closed at</dt>
           <dd className="figure">{utcInstant(raffle.endsAt)}</dd>
 
-          <dt className="text-neutral-500">block used</dt>
+          <dt className="text-quiet">block used</dt>
           <dd className="figure">{raffle.drawHeight?.toString() ?? "not resolved yet"}</dd>
 
-          <dt className="text-neutral-500">that block&apos;s time</dt>
+          <dt className="text-quiet">that block&apos;s time</dt>
           <dd className="figure">
             {raffle.drawBlockTime ? utcInstant(raffle.drawBlockTime) : "not resolved yet"}
           </dd>
 
-          <dt className="text-neutral-500">seed</dt>
+          <dt className="text-quiet">seed</dt>
           <dd className="figure break-all">{raffle.seed ?? "not revealed"}</dd>
 
-          <dt className="text-neutral-500">blockhash</dt>
+          <dt className="text-quiet">blockhash</dt>
           <dd className="figure break-all">{raffle.drawBlockhash ?? "not read yet"}</dd>
 
-          <dt className="text-neutral-500">ticketCount</dt>
+          <dt className="text-quiet">ticketCount</dt>
           <dd className="figure">{tickets.length}</dd>
 
           {material && (
             <>
-              <dt className="text-neutral-500">material</dt>
+              <dt className="text-quiet">material</dt>
               <dd className="figure break-all">{material}</dd>
             </>
           )}
@@ -219,9 +219,9 @@ winningTicket  = (material as a big-endian integer mod ticketCount) + 1`}
          * is shown as a state with a name rather than as a page that looks
          * unfinished.
          */
-        <section className="mt-10 rounded border border-neutral-300 bg-neutral-50 p-4">
+        <section className="mt-10 rounded border border-rule bg-panel p-4">
           <h2 className="font-semibold">The seed has not been revealed</h2>
-          <p className="mt-2 text-neutral-700">
+          <p className="mt-2 text-quiet">
             {raffle.status === "open" || raffle.status === "draft"
               ? "This raffle has not closed yet. The seed is published when it does — publishing it earlier would let anyone compute the winning number and buy exactly that ticket."
               : "This raffle has closed and its seed has not been published. Until it is, this draw cannot be checked by anyone, including us. That is the one failure this method does not prevent: it makes a biased draw impossible and makes a withheld one visible, which is what this notice is."}
@@ -229,7 +229,7 @@ winningTicket  = (material as a big-endian integer mod ticketCount) + 1`}
         </section>
       ) : (
         <section className="mt-10">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-quiet">
             The check
           </h2>
           <ul className="mt-3 space-y-2 text-sm">
@@ -273,15 +273,15 @@ winningTicket  = (material as a big-endian integer mod ticketCount) + 1`}
          * deterministic, and what stops us having chosen among several.
          */
         <section className="mt-10">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-quiet">
             Checking the block against the chain yourself
           </h2>
-          <p className="mt-3 text-neutral-700">
+          <p className="mt-3 text-quiet">
             The values above are ours. These two lookups are not — they ask{" "}
             {raffle.chain === "solana" ? "Solana" : "Robinhood Chain"} directly, through any node
             you like, and are what turns the section above from our claim into your check.
           </p>
-          <pre className="figure mt-3 overflow-x-auto rounded border border-neutral-300 bg-neutral-50 p-4 text-xs">
+          <pre className="figure mt-3 overflow-x-auto rounded border border-rule bg-panel p-4 text-xs">
 {raffle.chain === "solana"
   ? `# 1. The block we used. Its blockhash and blockTime must match the values above.
 solana block ${raffle.drawHeight.toString()} --url mainnet-beta
@@ -296,7 +296,7 @@ cast block ${raffle.drawHeight.toString()} --rpc-url <a Robinhood Chain node>
 #    If it is not, we did not use the first block.
 cast block ${(raffle.drawHeight - 1n).toString()} --rpc-url <a Robinhood Chain node>`}
           </pre>
-          <p className="mt-3 text-neutral-700">
+          <p className="mt-3 text-quiet">
             Two things have to hold. The block we used is{" "}
             <strong>at or after the anchored instant</strong>, and the one before it is{" "}
             <strong>before</strong> it. The first is what makes the draw unknowable during the
@@ -306,7 +306,7 @@ cast block ${(raffle.drawHeight - 1n).toString()} --rpc-url <a Robinhood Chain n
       )}
 
       <section className="mt-10">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-quiet">
           What this does not prove
         </h2>
         {/*
@@ -321,7 +321,7 @@ cast block ${(raffle.drawHeight - 1n).toString()} --rpc-url <a Robinhood Chain n
           Reusing the Solana wording there would be a claim this product cannot
           support, and DESIGN.md §8.4 forbids exactly that.
         */}
-        <p className="mt-3 text-neutral-700">
+        <p className="mt-3 text-quiet">
           {raffle.chain === "solana" ? (
             <>
               It proves the winner was not chosen after the fact: the commitment was published
@@ -345,7 +345,7 @@ cast block ${(raffle.drawHeight - 1n).toString()} --rpc-url <a Robinhood Chain n
       </section>
 
       <section className="mt-10">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-quiet">
           Tickets
         </h2>
         <ul className="figure mt-3 space-y-1 text-xs">

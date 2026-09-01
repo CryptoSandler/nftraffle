@@ -164,40 +164,40 @@ export function BuyTicketsRobinhood({
         /* The page SAYS it is a test network, for the same reason the Solana
            panel says devnet: a screen that quietly accepts test payments is one
            somebody will mistake for the real thing. */
-        <p className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+        <p className="rounded border border-edge bg-panel p-3 text-sm text-ink">
           This is {robinhoodNetworkLabel(serverNetwork)}. Nothing here is worth anything.
         </p>
       )}
 
       {phase.step === "done" ? (
-        <p className="rounded border border-neutral-300 bg-neutral-50 p-4">
+        <p className="rounded border border-rule bg-panel p-4">
           {phase.tickets.length > 0
             ? `Paid. Your ticket numbers: ${phase.tickets.join(", ")}.`
             : "Paid. Your tickets are recorded."}
         </p>
       ) : phase.step === "filed" ? (
-        <p className="rounded border border-amber-300 bg-amber-50 p-4 text-amber-900">{phase.message}</p>
+        <p className="rounded border border-edge bg-panel p-4 text-ink">{phase.message}</p>
       ) : (
         <>
           <label className="block text-sm">
-            <span className="text-neutral-600">How many tickets</span>
+            <span className="text-quiet">How many tickets</span>
             <input
               type="number"
               min={1}
               max={Math.max(1, ticketsRemaining)}
               value={quantity}
               onChange={(event) => setQuantity(Math.max(1, Number(event.target.value) || 1))}
-              className="figure mt-1 w-28 rounded border border-neutral-300 px-2 py-1"
+              className="figure mt-1 w-28 rounded border border-rule px-2 py-1"
             />
           </label>
 
-          <p className="text-sm text-neutral-600">
+          <p className="text-sm text-quiet">
             {quantity} × {ticketPriceDisplay} {nativeSymbol}
           </p>
 
           {!connection ? (
             wallets.length === 0 ? (
-              <p className="text-sm text-neutral-600">
+              <p className="text-sm text-quiet">
                 No EVM wallet was found in this browser. Install one that supports Robinhood Chain,
                 then reload.
               </p>
@@ -209,7 +209,7 @@ export function BuyTicketsRobinhood({
                     type="button"
                     disabled={connecting}
                     onClick={() => connect(wallet).catch(() => undefined)}
-                    className="rounded border border-neutral-400 px-3 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
+                    className="rounded border border-edge px-3 py-2 text-sm hover:bg-panel disabled:border-rule disabled:bg-panel disabled:text-quiet"
                   >
                     Connect {wallet.info.name}
                   </button>
@@ -221,13 +221,13 @@ export function BuyTicketsRobinhood({
               type="button"
               disabled={phase.step === "working" || ticketsRemaining < 1}
               onClick={buy}
-              className="rounded bg-neutral-900 px-4 py-2 text-sm text-white disabled:opacity-50"
+              className="rounded bg-ink px-4 py-2 text-sm text-ground disabled:border-rule disabled:bg-panel disabled:text-quiet"
             >
               {phase.step === "working" ? phase.note : `Buy ${quantity}`}
             </button>
           )}
 
-          {phase.step === "error" && <p className="text-sm text-red-700">{phase.message}</p>}
+          {phase.step === "error" && <p className="text-sm text-ink">{phase.message}</p>}
         </>
       )}
     </div>
@@ -236,6 +236,6 @@ export function BuyTicketsRobinhood({
 
 function Notice({ children }: { children: React.ReactNode }) {
   return (
-    <p className="rounded border border-neutral-300 bg-neutral-50 p-4 text-neutral-700">{children}</p>
+    <p className="rounded border border-rule bg-panel p-4 text-quiet">{children}</p>
   );
 }

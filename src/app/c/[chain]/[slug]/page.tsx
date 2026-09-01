@@ -57,13 +57,13 @@ export default async function CollectionPage({ params }: PageProps<"/c/[chain]/[
     return (
       <Shell title={launched.name} subtitle={launched.symbol}>
         <dl className="mt-8 grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm">
-          <dt className="text-neutral-500">Supply</dt>
+          <dt className="text-quiet">Supply</dt>
           <dd className="figure">{launched.itemsAvailable}</dd>
 
-          <dt className="text-neutral-500">Mint price</dt>
+          <dt className="text-quiet">Mint price</dt>
           <dd className="figure">{chain.formatNative(launched.priceNative)} {chain.nativeSymbol}</dd>
 
-          <dt className="text-neutral-500">Platform fee per mint</dt>
+          <dt className="text-quiet">Platform fee per mint</dt>
           {/* Read from the row, not from the current setting. The guard takes
               fixed lamports and was frozen when this machine was deployed, so
               the live value can disagree with what this collection actually
@@ -72,13 +72,13 @@ export default async function CollectionPage({ params }: PageProps<"/c/[chain]/[
             {chain.formatNative(launched.mintFeeNative)} {chain.nativeSymbol} ({launched.mintFeeBps} bps)
           </dd>
 
-          <dt className="text-neutral-500">Creator</dt>
+          <dt className="text-quiet">Creator</dt>
           <dd className="figure break-all">{launched.creatorWallet}</dd>
 
-          <dt className="text-neutral-500">Collection</dt>
+          <dt className="text-quiet">Collection</dt>
           <dd className="figure break-all">{launched.collectionMint ?? "—"}</dd>
 
-          <dt className="text-neutral-500">Candy machine</dt>
+          <dt className="text-quiet">Candy machine</dt>
           <dd className="figure break-all">{launched.candyMachine ?? "—"}</dd>
         </dl>
         <Raffles raffles={raffles} />
@@ -101,16 +101,16 @@ export default async function CollectionPage({ params }: PageProps<"/c/[chain]/[
 
   return (
     <Shell title={metadata.name || slug} subtitle="Not launched here">
-      <p className="mt-4 max-w-xl text-sm text-neutral-600">
+      <p className="mt-4 max-w-xl text-sm text-quiet">
         {/* Says what it is rather than implying an endorsement. The mint address
             is the only identity claim this page makes, and it is checkable. */}
         This collection was not launched on this site. Everything below is read from the chain
         directly — there is no supply, price or fee here because we have no part in it.
       </p>
       <dl className="mt-8 grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm">
-        <dt className="text-neutral-500">Collection</dt>
+        <dt className="text-quiet">Collection</dt>
         <dd className="figure break-all">{slug}</dd>
-        <dt className="text-neutral-500">Chain</dt>
+        <dt className="text-quiet">Chain</dt>
         <dd className="figure">{chain.id}</dd>
       </dl>
       <Raffles raffles={raffles} />
@@ -133,7 +133,7 @@ function Shell({
         Home
       </Link>
       <h1 className="mt-6 text-2xl font-semibold tracking-tight">{title}</h1>
-      <p className="figure mt-1 text-neutral-600">{subtitle}</p>
+      <p className="figure mt-1 text-quiet">{subtitle}</p>
       {children}
     </main>
   );
@@ -144,18 +144,18 @@ async function Raffles({ raffles }: { raffles: RaffleSummary[] }) {
   const displays = await assetDisplays(raffles);
   return (
     <section className="mt-12">
-      <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-neutral-500">
+      <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-quiet">
         Raffles for this collection
       </h2>
       {raffles.length === 0 ? (
-        <p className="text-neutral-600">No raffles for this collection yet.</p>
+        <p className="text-quiet">No raffles for this collection yet.</p>
       ) : (
-        <ul className="divide-y divide-neutral-200 border-y border-neutral-200">
+        <ul className="divide-y divide-rule border-y border-rule">
           {raffles.map((raffle) => {
             const display = displays.get(`${raffle.chain}:${raffle.prizeAsset}`);
             return (
               <li key={raffle.id} className="py-4">
-                <Link className="flex gap-4 hover:bg-neutral-50" href={`/r/${raffle.slug}`}>
+                <Link className="flex gap-4 hover:bg-panel" href={`/r/${raffle.slug}`}>
                   <AssetImage
                     src={display?.imageUrl ?? null}
                     name={display?.name ?? raffle.prizeAsset}
@@ -165,12 +165,12 @@ async function Raffles({ raffles }: { raffles: RaffleSummary[] }) {
                     <div className="flex items-baseline justify-between gap-4">
                       {/* The asset's name, never the slug — the slug is the URL. */}
                       <span className="truncate font-medium">{display?.name ?? raffle.prizeAsset}</span>
-                      <span className="figure shrink-0 text-sm text-neutral-600">
+                      <span className="figure shrink-0 text-sm text-quiet">
                         {adapterFor(raffle.chain).formatNative(raffle.ticketPriceNative)}{" "}
                         {adapterFor(raffle.chain).nativeSymbol}
                       </span>
                     </div>
-                    <p className="mt-1 text-sm text-neutral-600">
+                    <p className="mt-1 text-sm text-quiet">
                       <span className="figure">{raffle.ticketsSold}</span> of{" "}
                       <span className="figure">{raffle.maxTickets}</span> tickets · {raffle.status}
                     </p>

@@ -47,9 +47,9 @@ export default async function AdminPage() {
             name="token"
             type="password"
             autoComplete="current-password"
-            className="w-full rounded border border-neutral-300 px-3 py-2"
+            className="w-full rounded border border-rule px-3 py-2"
           />
-          <button className="rounded bg-neutral-900 px-4 py-2 text-white" type="submit">
+          <button className="rounded bg-ink px-4 py-2 text-ground" type="submit">
             Sign in
           </button>
         </form>
@@ -74,30 +74,30 @@ export default async function AdminPage() {
       </header>
 
       <section className="mt-12">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-quiet">
           Draws due
         </h2>
         {draws.length === 0 ? (
-          <p className="mt-3 text-neutral-600">Nothing to draw.</p>
+          <p className="mt-3 text-quiet">Nothing to draw.</p>
         ) : (
-          <ul className="mt-3 divide-y divide-neutral-200 border-y border-neutral-200">
+          <ul className="mt-3 divide-y divide-rule border-y border-rule">
             {draws.map((raffle) => (
               <li key={raffle.id} className="py-4">
                 <div className="flex items-baseline justify-between gap-4">
                   <span className="font-medium">
                     {displays.get(`${raffle.chain}:${raffle.prizeAsset}`)?.name ?? raffle.slug}
                   </span>
-                  <span className="figure text-sm text-neutral-600">
+                  <span className="figure text-sm text-quiet">
                     {raffle.ticketsSold} tickets
                   </span>
                 </div>
-                <div className="figure text-xs text-neutral-500">{raffle.slug}</div>
+                <div className="figure text-xs text-quiet">{raffle.slug}</div>
                 <form
                   action={`/api/admin/raffles/${raffle.id}/draw`}
                   method="post"
                   className="mt-2"
                 >
-                  <button className="rounded border border-neutral-300 px-3 py-1 text-sm" type="submit">
+                  <button className="rounded border border-rule px-3 py-1 text-sm" type="submit">
                     {/* Disabled by the server, not here: a raffle that sold
                         nothing has no winner, and `recordDraw` refuses it. */}
                     Reveal and draw
@@ -110,13 +110,13 @@ export default async function AdminPage() {
       </section>
 
       <section className="mt-12">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-quiet">
           Payouts due
         </h2>
         {payouts.length === 0 ? (
-          <p className="mt-3 text-neutral-600">Nothing to pay.</p>
+          <p className="mt-3 text-quiet">Nothing to pay.</p>
         ) : (
-          <ul className="mt-3 divide-y divide-neutral-200 border-y border-neutral-200">
+          <ul className="mt-3 divide-y divide-rule border-y border-rule">
             {payouts.map((raffle) => {
               // The raffle's OWN fee, not the current setting: it was frozen
               // when the seller listed, and this figure is what an operator is
@@ -144,23 +144,23 @@ export default async function AdminPage() {
                   <div className="font-medium">
                     {displays.get(`${raffle.chain}:${raffle.prizeAsset}`)?.name ?? raffle.slug}
                   </div>
-                  <div className="figure text-xs text-neutral-500">{raffle.slug}</div>
+                  <div className="figure text-xs text-quiet">{raffle.slug}</div>
                   <dl className="mt-2 grid grid-cols-[max-content_1fr] gap-x-6 gap-y-1 text-sm">
-                    <dt className="text-neutral-500">Send this asset</dt>
+                    <dt className="text-quiet">Send this asset</dt>
                     <dd className="figure break-all">{raffle.prizeAsset}</dd>
-                    <dt className="text-neutral-500">To the winner</dt>
+                    <dt className="text-quiet">To the winner</dt>
                     <dd className="figure break-all">{raffle.winnerWallet}</dd>
-                    <dt className="text-neutral-500">Gross</dt>
+                    <dt className="text-quiet">Gross</dt>
                     <dd className="figure">{chain.formatNative(split.grossNative)} {chain.nativeSymbol}</dd>
-                    <dt className="text-neutral-500">Platform fee</dt>
+                    <dt className="text-quiet">Platform fee</dt>
                     <dd className="figure">
                       {chain.formatNative(split.houseFeeNative)} {chain.nativeSymbol} ({raffle.houseFeeBps} bps)
                     </dd>
-                    <dt className="text-neutral-500">Send the seller</dt>
+                    <dt className="text-quiet">Send the seller</dt>
                     <dd className="figure">
                       {chain.formatNative(split.sellerNetNative)} {chain.nativeSymbol}
                     </dd>
-                    <dt className="text-neutral-500">Seller wallet</dt>
+                    <dt className="text-quiet">Seller wallet</dt>
                     <dd className="figure break-all">{raffle.sellerWallet}</dd>
                   </dl>
                   <form
@@ -171,15 +171,15 @@ export default async function AdminPage() {
                     <input
                       name="prizeSignature"
                       placeholder="Prize transfer signature"
-                      className="figure w-full rounded border border-neutral-300 px-3 py-2 text-sm"
+                      className="figure w-full rounded border border-rule px-3 py-2 text-sm"
                     />
                     <input
                       name="proceedsSignature"
                       placeholder="Proceeds transfer signature"
-                      className="figure w-full rounded border border-neutral-300 px-3 py-2 text-sm"
+                      className="figure w-full rounded border border-rule px-3 py-2 text-sm"
                     />
                     <button
-                      className="rounded border border-neutral-300 px-3 py-1 text-sm"
+                      className="rounded border border-rule px-3 py-1 text-sm"
                       type="submit"
                     >
                       {/* Both are checked on chain before this is accepted.
