@@ -80,11 +80,14 @@ body {
 }
 
 /**
- * The countdown, and the ONLY place `--accent` appears.
+ * The countdown. One of the accent's TWO doors, the other being `.pop-action`.
  *
  * Named rather than applied as a utility so that "what is coloured on this page"
  * is one grep, and so the rule survives somebody reaching for `text-accent` on a
  * button — which the guardian test refuses.
+ *
+ * `docs/decisions.md` Q22 reopened Q19's first answer to allow the second door
+ * and closed it again at two. A THIRD needs a Q23, not an edit here.
  */
 .clock {
   color: var(--accent);
@@ -108,10 +111,11 @@ body {
  * `:focus-visible`, not `:focus` — a mouse click should not draw a ring, and
  * making it do so is why people disable focus styles altogether.
  *
- * **The ring is `ink`, not the accent.** The accent means the clock and nothing
- * else (docs/decisions.md Q19), and a focus ring is the most tempting exception
- * there is. `ink` on `ground` is 17.90:1 in light and 16.45:1 in dark — the
- * highest-contrast pair in the palette, which is what a focus ring should be.
+ * **The ring is `ink`, not the accent.** The accent has two jobs, the action and
+ * the clock (docs/decisions.md Q22), and a focus ring is the most tempting third
+ * there is. `ink` on `ground` is 18.61:1 in light and 17.27:1 in dark — the
+ * highest-contrast pair in the palette, which is what a focus ring should be, and
+ * both figures are recomputed from DESIGN.md §2 by `design-tokens.test.ts`.
  *
  * The offset is what keeps it legible against a control that already has a
  * border: without it the ring and the border sit on the same pixel and read as
@@ -257,6 +261,68 @@ a {
 
 .pop-action:active {
   transform: translateY(1px);
+}
+
+/**
+ * ---------------------------------------------------------------------------
+ * THE PROGRESS RAIL — supply, and nothing else. DESIGN.md §5.
+ * ---------------------------------------------------------------------------
+ * A track, a fill, a percent and a fraction. `docs/benchmark-nft.md` list A1:
+ * it is the one marketplace pattern that stays true with no liquidity, because
+ * it reports supply — which this product knows exactly — rather than demand,
+ * which it does not. `0 / 1000` is as honest as `70 / 1111`.
+ *
+ * **THE FILL IS `ink`, NOT THE ACCENT, AND THAT IS THE INTERESTING DECISION.**
+ * The obvious build fills it with the brand colour. `docs/decisions.md` Q22 gives
+ * the accent exactly two jobs — the action and the clock — and says a third
+ * selector needs a Q23 rather than an edit. Supply is neither: it is not
+ * something you press and it is not something running out. So the rail is `ink`
+ * on `rule`, which measures 18.61:1 in light and 17.27:1 in dark against the
+ * page. If the accent is ever wanted here, that is a decision to record, not a
+ * colour to swap.
+ *
+ * **NOTHING ABOUT IT MOVES**, and the fill has no easing at all. §6 forbids
+ * animating a number, and a bar gliding toward its value is exactly that — it
+ * reads as live when the page is a server render that will not change until it
+ * is reloaded. Easing a `width` is refused by the guardian test as well, which
+ * is why the rule and its enforcement cannot drift apart here.
+ */
+.rail {
+  background: var(--rule);
+  border-radius: 999px;
+  height: 6px;
+  overflow: hidden;
+}
+
+.rail-fill {
+  background: var(--ink);
+  height: 100%;
+  border-radius: 999px;
+}
+
+/**
+ * ---------------------------------------------------------------------------
+ * THE BOTTOM BARS — mobile only. DESIGN.md §5.
+ * ---------------------------------------------------------------------------
+ * `.tabrail` is the three doors at the thumb (benchmark list A6, from Zora and
+ * Tensor); `.actionbar` is the one action a screen is about, pinned (list A5,
+ * from Tensor and Magic Eden). Both are `sm:hidden` in the markup: on a desktop
+ * the doors are already on the page and the action is already in the flow, and a
+ * bar that repeats what is visible is chrome.
+ *
+ * They carry `--ground` rather than a translucent panel on purpose: a blurred bar
+ * over scrolling art has no measurable contrast, and every ratio in DESIGN.md §2
+ * would stop meaning anything under it — the same argument as the ban on
+ * `opacity` for text.
+ *
+ * `env(safe-area-inset-bottom)` keeps them clear of the home indicator. Without
+ * it the last row of a tab rail sits under it and reads as unresponsive.
+ */
+.tabrail,
+.actionbar {
+  background: var(--ground);
+  border-top: 1px solid var(--rule);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 /* A door: one of the three entries. It moves the same 2px, and no further. */

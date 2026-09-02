@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { surfaceRefusal, surfaceState } from "../surfaces";
 
 /**
@@ -33,6 +33,23 @@ function configureAll() {
   process.env.RAFFLE_LISTING_FEE_SOLANA = "0.05";
   process.env.HOUSE_FEE_BPS_SOLANA = "500";
 }
+
+/**
+ * **CLEARED BEFORE, NOT ONLY AFTER — and the "only after" version was wrong.**
+ *
+ * The suite loads `.env.local`, so a developer who has actually configured their
+ * machine hands the FIRST test a fully configured environment and
+ * "closes every surface when nothing is configured" fails against a defect that
+ * does not exist. Measured 2026-09-02: adding `PAYMENT_WALLET_SOLANA` locally,
+ * to photograph the buy panel, turned this file red.
+ *
+ * Cleanup after each case was already here. What was missing is that a test's
+ * preconditions are its own job: the file before it may not have run, and the
+ * environment it inherits belongs to whoever is running it.
+ */
+beforeEach(() => {
+  for (const name of ALL) delete process.env[name];
+});
 
 afterEach(() => {
   for (const name of ALL) delete process.env[name];

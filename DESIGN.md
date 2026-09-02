@@ -192,15 +192,18 @@ exist.
 |---|---|---|
 | `Inter` | `--font-sans` | sentences |
 | `IBM Plex Mono` | `--font-mono` | every figure, without exception, including inside sentences |
-| `Archivo Black` | `--font-display` | the wordmark, every heading, and the action — never a sentence, never a figure |
+| `Archivo Black` | `--font-display` | the wordmark, the titles it sets, and the action — never a sentence, never a figure |
 
 The mono is not decoration. This product is dense with figures that get compared
 down a column — ticket prices, lamport amounts, basis points, ticket counts, slot
 numbers — and proportional digits make that a chore.
 
 **Archivo Black arrived with the direction, and it reaches type through exactly
-two doors.** `.display`, which every heading and the wordmark carry, and
-`.pop-action`, which is the button. One weight, and no third door: a display face
+two doors.** `.display`, which the wordmark and the page's titles carry, and
+`.pop-action`, which is the button. **Titles, not every `<h2>`:** a small
+uppercase caption in `quiet` — `MINT START`, `THE METHOD` on the verification
+page — is a label for the row under it, and setting those in a display face
+would make a page of shouted labels with nothing left to be its title. One weight, and no third door: a display face
 that starts appearing on labels, meta lines or a table header is a page shouting
 at its own reader, and `design-form.test.ts` fails on a third rule using
 `var(--font-display)`.
@@ -288,6 +291,49 @@ needs a fourth is a page doing something it should not.
 **Nothing is centred except the page itself.** Centred text in a column of
 figures makes a column that cannot be scanned, and every screen here is
 ultimately a column of figures.
+
+**The progress rail, and the one colour decision in it.** Supply is reported as a
+track, a fill, a percent at one end and a fraction at the other —
+`docs/benchmark-nft.md` list A1, from Scatter. It is the only pattern taken from
+a marketplace's collection page, and it survives here because it reports supply,
+which this product knows exactly, rather than demand, which it does not: `0/1000`
+is as honest a sentence as `70/1111`.
+
+**The fill is `ink` on a `rule` track. Not the accent.** The obvious build fills
+it with the brand colour; §2 gives the accent two jobs, the action and the clock,
+and supply is neither — it is not something you press and it is not something
+running out. `design-form.test.ts` asserts the fill is `ink` and carries no
+accent, and `design-tokens.test.ts` would catch the third accent selector
+independently. Wanting the accent here is a **Q23**, not a colour swap.
+
+**Nothing about the rail moves.** No easing on its width — §6 forbids animating a
+number, and a bar gliding toward its value reads as live when the page is a
+server render that will not change until it is reloaded.
+
+**Two bars, on a phone and nowhere else.** `.tabrail` is the three doors at the
+thumb (list A6); `.actionbar` is the one action a screen is about, pinned (list
+A5). Both are `sm:hidden`: on a desktop the doors are on the page and the action
+is in the flow, so a pinned bar repeats what is visible, which is the definition
+of chrome. Both are **opaque `ground`** — a translucent bar over scrolling art
+has no contrast anybody can compute, which is the same argument as the ban on
+`opacity` for text.
+
+**The pinned action is a LINK to the control, never a second copy of it.** The
+buy and mint panels carry wallet state; two instances are two wallet sessions
+disagreeing about which one the person is using. It carries the price so it is a
+fact and not only a scroll button, and it is rendered **only when the action can
+actually be taken** — a pinned button that cannot work is worse than none, which
+is why `docs/benchmark-nft.md` list B7 refuses Magic Eden's Instant Sell tile.
+
+**The peek carousel, on a phone, for the home page's running raffles only** (list
+A7). The neighbouring card stays visible at the edge, which is what makes the
+swipe discoverable — a row ending flush at the viewport reads as the end of the
+list. CSS scroll-snap and nothing else: no library, no dots, and **no autoplay**,
+because something that moves on its own is what §6 refuses outright.
+
+**Density is a setting on the row, never on the facts.** Compact makes the image
+smaller and the padding tighter. It does not drop a column: a density control
+that removes information is a filter wearing the wrong name.
 
 ## 6. Motion — NORMATIVE
 
@@ -384,6 +430,32 @@ that only says "provably fair" has proved nothing and used up the reader's
 patience.
 
 ---
+
+### 8.5 A fact that does not exist is an em dash, never a zero
+
+**`—`, and never `0`, `0%`, `N/A` or a hidden row.**
+
+`docs/benchmark-nft.md` list A4, from Scatter, which renders `— ETH` for the
+floor of a collection that has no market yet. It is the correct empty state for a
+product whose collections are **all** new, and it distinguishes the two sentences
+a zero collapses:
+
+| what is true | what the page says |
+|---|---|
+| nothing has been minted | `0%`, `0 / 1000` — a fact, and a rail at zero |
+| we could not ask the chain | `—`, and no rail at all |
+
+The second is the one that matters. A candy machine read that fails is not a
+collection with no sales, and rendering it as `0%` publishes a claim about
+somebody's launch that nothing checked. `Progress` takes a total of `0` to mean
+"unknown" and emits an em dash with a screen-reader label saying what is unknown
+— it also emits no `role="progressbar"`, because `aria-valuemax="0"` is not a
+range and "0 percent" would be a number nobody wrote.
+
+**Nor is the row deleted.** The collection page of something we did not launch
+shows Supply, Mint price and Platform fee as em dashes rather than omitting them,
+so the page reads as *a collection we know less about* rather than as one with no
+supply.
 
 ## 9. Accessibility
 

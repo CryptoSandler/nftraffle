@@ -9,6 +9,7 @@ import { chainIdFor, robinhoodNetwork } from "../../../lib/chain/robinhood/netwo
 import { assetDisplay } from "../../../lib/chain/asset-display";
 import { AssetImage } from "../../../components/AssetImage";
 import { Countdown } from "../../../components/Countdown";
+import { Progress } from "../../../components/Progress";
 import { utcInstant } from "../../../lib/countdown";
 import { advanceRaffle, raffleBySlug } from "../../../lib/raffles/lifecycle";
 import { payoutSplit } from "../../../lib/raffles/payout";
@@ -47,32 +48,58 @@ export default async function RafflePage({ params }: PageProps<"/r/[slug]">) {
   // nowhere else (`docs/design-state-2026-08-31.md` §3).
   const asset = await assetDisplay(raffle.chain, raffle.prizeAsset);
 
+  const buyable = raffle.status === "open" && !buyingClosed;
+
   return (
-    <main className="mx-auto w-full max-w-2xl px-6 py-16">
-      <Link className="text-sm underline underline-offset-4" href="/">
+    <>
+    <main className="mx-auto w-full max-w-2xl px-6 pb-28 pt-8">
+      <Link className="text-sm text-quiet underline underline-offset-4" href="/">
         All raffles
       </Link>
 
-      <div className="mt-6 flex flex-wrap items-start gap-6">
-        <AssetImage src={asset.imageUrl} name={asset.name} className="h-32 w-32 shrink-0" />
-        <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-semibold tracking-tight">{asset.name}</h1>
+      {/*
+        * ART AS THE PANEL (`docs/benchmark-nft.md` list A3). It was a 128px
+        * thumbnail beside the title; the thing being raffled is the reason
+        * anybody is on this page, and Scatter, OpenSea's hero and every
+        * collection site in the benchmark give it the full width.
+        */}
+      <AssetImage
+        src={asset.imageUrl}
+        name={asset.name}
+        className="mt-6 aspect-square w-full rounded-2xl"
+      />
 
-          {/* The status is a word in the document, not a colour and not a timer
-              reaching zero (DESIGN.md §9). */}
-          <p className="mt-1 text-quiet">
-            This raffle is <strong>{raffle.status}</strong>.
-          </p>
+      <h1 className="display mt-6 text-[clamp(1.75rem,6vw,3rem)]">{asset.name}</h1>
 
-          {raffle.status === "open" && (
-            <p className="mt-3">
-              <Countdown
-                targetMs={raffle.endsAt.getTime()}
-                label="Closes in"
-              />
-            </p>
-          )}
-        </div>
+      {/* The status is a word in the document, not a colour and not a timer
+          reaching zero (DESIGN.md §9). */}
+      <p className="mt-2 text-quiet">
+        This raffle is <strong className="text-ink">{raffle.status}</strong>.
+      </p>
+
+      {/*
+        * THE COUNTDOWN IS THE LOUDEST FACT ON THE PAGE (list A2), and it is the
+        * one number this product owns: a clock is true on day zero, where a
+        * floor price needs a market. `size="lead"` changes the type scale and
+        * nothing else — same accent, same tabular face, same absolute instant
+        * beside it for checking.
+        */}
+      {raffle.status === "open" && (
+        <p className="mt-4">
+          <Countdown targetMs={raffle.endsAt.getTime()} label="Closes in" size="lead" />
+        </p>
+      )}
+
+      {/* Supply, not demand (list A1). `sold of max` is exact from the first
+          ticket, which is what makes it the one marketplace pattern that
+          survives here. */}
+      <div className="mt-6">
+        <Progress
+          done={sold}
+          total={raffle.maxTickets}
+          label={`Tickets sold for ${asset.name}`}
+          unit="tickets"
+        />
       </div>
 
       {raffle.status === "cancelled" && (
@@ -163,7 +190,7 @@ export default async function RafflePage({ params }: PageProps<"/r/[slug]">) {
         </section>
       )}
 
-      <section className="mt-10 border-t border-rule pt-6">
+      <section id="buy" className="mt-10 border-t border-rule pt-6">
         {raffle.status !== "open" ? (
           <p className="text-quiet">Tickets are no longer on sale for this raffle.</p>
         ) : !buyingClosed ? (
@@ -219,5 +246,24 @@ export default async function RafflePage({ params }: PageProps<"/r/[slug]">) {
         </p>
       )}
     </main>
+
+    {/*
+      * THE ONE ACTION, PINNED, ON A PHONE ONLY (list A5, from Tensor and Magic
+      * Eden). A link to the control rather than a second copy of it: the buy
+      * panel carries wallet state, and two instances would be two wallet
+      * sessions disagreeing about which one the person is using.
+      *
+      * It is rendered only when tickets can actually be bought. A pinned button
+      * that cannot work is the one thing worse than no pinned button — which is
+      * why the benchmark refused Magic Eden's Instant Sell tile (list B7).
+      */}
+    {buyable && (
+      <div className="actionbar fixed inset-x-0 bottom-16 z-10 px-4 py-3 sm:hidden">
+        <a className="pop-action flex items-center justify-center px-6 py-3 text-base" href="#buy">
+          Buy a ticket · {chain.formatNative(raffle.ticketPriceNative)} {chain.nativeSymbol}
+        </a>
+      </div>
+    )}
+    </>
   );
 }

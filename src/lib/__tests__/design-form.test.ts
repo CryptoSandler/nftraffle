@@ -187,6 +187,61 @@ describe("§5 Layout — two widths, and nothing centred but the page", () => {
   });
 });
 
+describe("§5 the progress rail and the bottom bars", () => {
+  /**
+   * **THE RAIL IS `ink` ON `rule`, AND THE ACCENT IS NOT ALLOWED IN IT.**
+   *
+   * This is the decision `docs/benchmark-nft.md` list A1 forced and
+   * `docs/decisions.md` Q22 settled. The obvious build fills a progress bar with
+   * the brand colour; Q22 gives the accent exactly two jobs, the action and the
+   * clock, and supply is neither — it is not something you press and it is not
+   * something running out. A third use needs a Q23, not a colour swap, and this
+   * is the case that will tempt somebody first.
+   */
+  it("the rail's fill is `ink`, never the accent", () => {
+    const block = CSS.slice(CSS.indexOf(".rail-fill {"), CSS.indexOf("}", CSS.indexOf(".rail-fill {")));
+    expect(block, "the fill must exist at all").toContain("background:");
+    expect(block).toContain("var(--ink)");
+    expect(block).not.toContain("--accent");
+  });
+
+  it("the rail's track is `rule`, the hairline token, not a control border", () => {
+    // `edge` is the boundary of something you act on (WCAG 1.4.11). A track is
+    // not actionable, so it takes the decoration token — and using `edge` here
+    // would make the one 3:1 promise in the palette mean two different things.
+    const block = CSS.slice(CSS.indexOf(".rail {"), CSS.indexOf("}", CSS.indexOf(".rail {")));
+    expect(block).toContain("var(--rule)");
+  });
+
+  /**
+   * **BOTH BOTTOM BARS ARE MOBILE ONLY.**
+   *
+   * On a desktop the three doors are on the page and the action is in the flow,
+   * so a pinned bar repeats what is already visible — which is the definition of
+   * chrome. It is also the failure mode nobody notices, because the person
+   * adding a bar is looking at a phone.
+   */
+  it("every use of .tabrail and .actionbar carries sm:hidden", () => {
+    const offenders: string[] = [];
+    for (const file of TSX) {
+      for (const line of readFileSync(file, "utf8").split("\n")) {
+        if (!/\b(tabrail|actionbar)\b/.test(line)) continue;
+        if (!/\bsm:hidden\b/.test(line)) offenders.push(`${rel(file)}: ${line.trim()}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("the bars are opaque, because contrast under a translucent bar is unmeasured", () => {
+    // The same argument as the ban on `opacity` for text: a blurred or
+    // translucent bar over scrolling art has no ratio anybody can compute, and
+    // every figure in DESIGN.md §2 stops meaning anything under it.
+    const block = CSS.slice(CSS.indexOf(".tabrail,"), CSS.indexOf("}", CSS.indexOf(".tabrail,")));
+    expect(block).toContain("var(--ground)");
+    expect(block).not.toMatch(/backdrop-filter|rgba|opacity/);
+  });
+});
+
 describe("§6 Motion — almost none, and the exceptions are named", () => {
   it("nothing animates", () => {
     // No skeletons, no shimmer, no spinners on data that is already there.
@@ -250,12 +305,22 @@ describe("nothing regressed to a machine token or a raw timestamp", () => {
      * A slug is a machine token and belongs in the URL. It is allowed in exactly
      * one place — a small secondary line in the admin queues, where an operator
      * matches a row to a record — and as a fallback when a chain gives no name.
+     *
+     * **`key=` was added to the exceptions on 2026-09-02**, when the collection
+     * page's raffle rows moved into a client component. A React key is never
+     * rendered — it is an identity for the reconciler — so keying a row by its
+     * slug does not put a machine token in front of anybody. The exception is
+     * narrow on purpose: `key=`, not "anything containing key".
+     *
+     * The same pass caught a real one this guard exists for, which is why it is
+     * still here: an `aria-label` read `Minted from ${slug}`, and a screen
+     * reader would have announced the URL fragment instead of the collection.
      */
     const offenders: string[] = [];
     for (const file of TSX) {
       for (const line of readFileSync(file, "utf8").split("\n")) {
         if (!/\.slug\}/.test(line)) continue;
-        if (/href=|slug=\{|text-xs|\?\?\s*raffle\.slug/.test(line)) continue;
+        if (/href=|slug=\{|key=\{|text-xs|\?\?\s*raffle\.slug/.test(line)) continue;
         offenders.push(`${rel(file)}: ${line.trim()}`);
       }
     }

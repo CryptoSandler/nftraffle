@@ -102,7 +102,7 @@ export default async function VerifyPage({ params }: PageProps<"/r/[slug]/verify
       <div className="mt-6 flex items-start gap-4">
         <AssetImage src={asset.imageUrl} name={asset.name} className="h-16 w-16 shrink-0" />
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight">How this draw was computed</h1>
+          <h1 className="display text-[clamp(1.5rem,5vw,2.25rem)]">How this draw was computed</h1>
           <p className="mt-1 text-quiet">{asset.name}</p>
         </div>
       </div>

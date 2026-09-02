@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Archivo_Black, IBM_Plex_Mono, Inter } from "next/font/google";
 import "./globals.css";
+import { TabRail } from "../components/TabRail";
 
 /**
  * Three families, all through `next/font/google`, with no system stack anywhere:
@@ -83,7 +84,16 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${inter.variable} ${plexMono.variable} ${archivoBlack.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col bg-ground text-ink">{children}</body>
+      {/*
+        * `pb-16` on a phone is the height of the tab rail, which is `fixed`. A
+        * fixed bar with no padding behind it covers the last element of every
+        * page — usually the footer that explains how a draw is checked, which is
+        * the one paragraph this product cannot afford to hide.
+        */}
+      <body className="min-h-full flex flex-col bg-ground text-ink pb-16 sm:pb-0">
+        {children}
+        <TabRail />
+      </body>
     </html>
   );
 }
