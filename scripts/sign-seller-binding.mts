@@ -1,8 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { randomBytes } from "node:crypto";
-import { base58Encode } from "../src/lib/base58.ts";
-import { sellerBindingMessage } from "../src/lib/wallet/solana-binding.ts";
+import { base58Encode } from "../src/lib/base58";
+import { sellerBindingMessage } from "../src/lib/wallet/solana-binding";
 
 /**
  * Produces the seller binding a Solana raffle draft now needs, from a keypair

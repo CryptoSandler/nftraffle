@@ -28,11 +28,14 @@ export type AssetMetadata = {
   image: string | null;
   collection: string | null;
   owner: string | null;
+  /** DAS keeps reporting an owner for a burnt asset. See `chain/adapter.ts`. */
+  burnt: boolean;
 };
 
 type DasAsset = {
   id?: string;
   ownership?: { owner?: string };
+  burnt?: boolean;
   content?: {
     metadata?: { name?: string };
     links?: { image?: string };
@@ -98,5 +101,8 @@ function toMetadata(raw: DasAsset): AssetMetadata {
     collection:
       raw.grouping?.find((group) => group.group_key === "collection")?.group_value ?? null,
     owner: raw.ownership?.owner ?? null,
+    // Absent means present-and-not-burnt: DAS omits the field on some
+    // interfaces, and the safe reading of "no answer" is the ordinary case.
+    burnt: raw.burnt === true,
   };
 }

@@ -221,6 +221,12 @@ export const robinhoodAdapter: ChainAdapter = {
       name: document.name ?? asset.display,
       image: document.image,
       collection: document.collection,
+      /**
+       * Always false, and that is not a stub. A burned ERC-721 makes
+       * `ownerOf` revert, so `owner` is already null on this chain and the
+       * ownership check refuses it before this field is read.
+       */
+      burnt: false,
       // NEVER from the document. Ownership is a chain fact, and a metadata file
       // claiming an owner is a metadata file lying about one.
       owner,

@@ -2,7 +2,12 @@
 
 import { useCallback, useState } from "react";
 import type { UsableWallet } from "../lib/wallet/solana-standard";
-import { SOLANA_SIGN_AND_SEND, SOLANA_SIGN_TRANSACTION, STANDARD_CONNECT } from "../lib/wallet/solana-standard";
+import {
+  SOLANA_SIGN_AND_SEND,
+  SOLANA_SIGN_MESSAGE,
+  SOLANA_SIGN_TRANSACTION,
+  STANDARD_CONNECT,
+} from "../lib/wallet/solana-standard";
 
 /**
  * Connecting to a Wallet Standard wallet and getting a transaction signed.
@@ -19,7 +24,8 @@ import { SOLANA_SIGN_AND_SEND, SOLANA_SIGN_TRANSACTION, STANDARD_CONNECT } from 
  *  - `solana:signTransaction` — the wallet signs and WE submit, through
  *    `/api/rpc`. The endpoint still never reaches the browser.
  *
- * WHO CALLS THIS: `src/components/BuyTickets.tsx`.
+ * WHO CALLS THIS: `src/components/BuyTickets.tsx` and
+ * `src/components/ListRaffle.tsx`.
  */
 
 /** The subset of a Wallet Standard account this component uses. */
@@ -29,6 +35,11 @@ type ConnectFeature = { connect: () => Promise<{ accounts: readonly WalletAccoun
 type SignAndSendFeature = {
   signAndSendTransaction: (
     ...inputs: { account: WalletAccount; transaction: Uint8Array; chain: string }[]
+  ) => Promise<readonly { signature: Uint8Array }[]>;
+};
+type SignMessageFeature = {
+  signMessage: (
+    ...inputs: { account: WalletAccount; message: Uint8Array }[]
   ) => Promise<readonly { signature: Uint8Array }[]>;
 };
 type SignFeature = {
@@ -64,6 +75,39 @@ export function useSolanaWallet() {
   }, []);
 
   const disconnect = useCallback(() => setConnection(null), []);
+
+  /** Whether this wallet can sign a message at all. Not every wallet can. */
+  const canSignMessage = Boolean(
+    connection && connection.wallet.wallet.features[SOLANA_SIGN_MESSAGE],
+  );
+
+  /**
+   * Signs a plain-text message and returns the signature, base58.
+   *
+   * **This signs TEXT and never a transaction**, which is the only reason a
+   * second signing path is acceptable at all: the bytes handed to the wallet
+   * are UTF-8 of a sentence the person can read in the prompt, and a wallet
+   * that renders it as anything else is a wallet showing them something we did
+   * not send. Used once, to prove the seller controls the wallet they are
+   * listing from (`lib/wallet/solana-binding.ts`).
+   */
+  const signMessageText = useCallback(
+    async (message: string): Promise<string> => {
+      if (!connection) throw new Error("No wallet is connected.");
+      const feature = connection.wallet.wallet.features[SOLANA_SIGN_MESSAGE] as
+        | SignMessageFeature
+        | undefined;
+      if (!feature?.signMessage) {
+        throw new Error("This wallet cannot sign messages, so it cannot list a raffle.");
+      }
+      const [{ signature }] = await feature.signMessage({
+        account: connection.account,
+        message: new TextEncoder().encode(message),
+      });
+      return base58(signature);
+    },
+    [connection],
+  );
 
   /**
    * Signs, submits, and returns the base58 signature.
@@ -121,7 +165,7 @@ export function useSolanaWallet() {
     [connection],
   );
 
-  return { connection, connecting, connect, disconnect, signAndSendWire };
+  return { connection, connecting, connect, disconnect, signAndSendWire, signMessageText, canSignMessage };
 }
 
 function toBase64(bytes: Uint8Array): string {

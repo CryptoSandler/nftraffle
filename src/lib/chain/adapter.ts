@@ -71,6 +71,15 @@ export type AssetMetadata = {
   /** The collection this asset belongs to, when the chain reports one. */
   collection: string | null;
   owner: string | null;
+  /**
+   * Whether the asset has been destroyed.
+   *
+   * **Separate from `owner` because a burnt asset still HAS one.** DAS keeps
+   * answering `ownership.owner` for a burnt Metaplex Core asset, so an
+   * ownership check alone accepts a listing for something that no longer
+   * exists — found on devnet, 2026-09-01, by listing one.
+   */
+  burnt: boolean;
 };
 
 export interface ChainAdapter {

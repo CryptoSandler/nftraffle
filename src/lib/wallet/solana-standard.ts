@@ -36,6 +36,15 @@
 /** Feature identifiers, from `@solana/wallet-standard-features`. */
 export const SOLANA_SIGN_AND_SEND = "solana:signAndSendTransaction";
 export const SOLANA_SIGN_TRANSACTION = "solana:signTransaction";
+/**
+ * Message signing, which only the listing flow needs.
+ *
+ * NOT part of `usableWallet`'s capability decision: a wallet that can pay is
+ * usable for buying tickets, which is most of what this site does. The listing
+ * form checks for this feature at the moment it needs it and says so plainly if
+ * it is missing (`docs/decisions.md` Q20).
+ */
+export const SOLANA_SIGN_MESSAGE = "solana:signMessage";
 /** From `@wallet-standard/features`. Without it there is no way to get an account. */
 export const STANDARD_CONNECT = "standard:connect";
 

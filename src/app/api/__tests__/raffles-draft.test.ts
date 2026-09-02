@@ -1,9 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ed25519 } from "@noble/curves/ed25519.js";
 import { POST } from "../raffles/route";
-import { base58Encode } from "../../../lib/base58";
 import { queryOne } from "../../../lib/db";
-import { sellerBindingMessage, type SellerBindingFields } from "../../../lib/wallet/solana-binding";
+import { sellerBindingMessage } from "../../../lib/wallet/solana-binding";
+import {
+  apiRequest,
+  assetRef,
+  binding,
+  draftBody,
+  healthyChain,
+  stubChain,
+  wallet,
+} from "./listing-fixtures";
 
 /**
  * Opening a raffle draft, driven through the route rather than through
@@ -17,67 +24,19 @@ import { sellerBindingMessage, type SellerBindingFields } from "../../../lib/wal
  * the call it is about from the route.
  */
 
-const HOST = "nftraffle.example";
-
-function wallet() {
-  const secretKey = ed25519.utils.randomSecretKey();
-  const address = base58Encode(ed25519.getPublicKey(secretKey));
-  return {
-    address,
-    sign: (message: string) =>
-      base58Encode(ed25519.sign(new TextEncoder().encode(message), secretKey)),
-  };
-}
-
-/** A 32-byte base58 string, which is what a Solana mint looks like. */
-function assetRef(): string {
-  return base58Encode(ed25519.getPublicKey(ed25519.utils.randomSecretKey()));
-}
-
-function binding(
-  seller: ReturnType<typeof wallet>,
-  prizeAsset: string,
-  over: Partial<SellerBindingFields> = {},
-) {
-  const fields: SellerBindingFields = {
-    domain: HOST,
-    address: seller.address,
-    chain: "solana",
-    prizeAsset,
-    nonce: "a1b2c3d4",
-    issuedAt: new Date().toISOString(),
-    ...over,
-  };
-  return { signature: seller.sign(sellerBindingMessage(fields)), fields };
-}
-
+/** Everything below drives the real route; the wallet and the chain are fixtures. */
 function draftRequest(body: unknown, ip = "1.2.3.4"): Request {
-  return new Request(`https://${HOST}/api/raffles`, {
-    method: "POST",
-    headers: { "x-forwarded-for": ip, "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  return apiRequest("/api/raffles", body, ip);
 }
 
-/** The DAS read the route makes to check the seller really holds the asset. */
 function stubOwner(owner: string) {
-  const fetchMock = vi.fn(async () => ({
-    ok: true,
-    status: 200,
-    json: async () => ({ jsonrpc: "2.0", id: 1, result: { ownership: { owner } } }),
-  }) as unknown as Response);
-  vi.stubGlobal("fetch", fetchMock);
-  return fetchMock;
+  return stubChain(healthyChain(owner)).fetchMock;
 }
 
 beforeEach(() => {
   process.env.SOLANA_RPC_URL = "https://rpc.example/das?api-key=secret";
-  process.env.ESCROW_WALLET_SOLANA = base58Encode(
-    ed25519.getPublicKey(ed25519.utils.randomSecretKey()),
-  );
-  process.env.PAYMENT_WALLET_SOLANA = base58Encode(
-    ed25519.getPublicKey(ed25519.utils.randomSecretKey()),
-  );
+  process.env.ESCROW_WALLET_SOLANA = assetRef();
+  process.env.PAYMENT_WALLET_SOLANA = assetRef();
   process.env.RAFFLE_LISTING_FEE_SOLANA = "0.01";
   process.env.HOUSE_FEE_BPS_SOLANA = "500";
   process.env.LISTING_RATE_LIMIT_MAX = "50";
@@ -88,17 +47,7 @@ afterEach(() => {
   delete process.env.LISTING_RATE_LIMIT_MAX;
 });
 
-function body(seller: ReturnType<typeof wallet>, asset: string, over: Record<string, unknown> = {}) {
-  return {
-    chain: "solana",
-    prizeAsset: asset,
-    ticketPrice: "0.05",
-    maxTickets: 10,
-    durationMinutes: 60,
-    binding: binding(seller, asset),
-    ...over,
-  };
-}
+const body = draftBody;
 
 describe("a draft names a seller only when that seller signed for it", () => {
   it("creates the draft when the binding is good", async () => {
@@ -170,6 +119,28 @@ describe("a draft names a seller only when that seller signed for it", () => {
     );
 
     expect(response.status).toBe(400);
+  });
+});
+
+describe("the asset itself", () => {
+  it("refuses a draft for an asset that has been burned", async () => {
+    const seller = wallet();
+    const asset = assetRef();
+    // DAS keeps answering `ownership.owner` for a burnt Core asset, so the
+    // ownership check alone accepts it. The devnet e2e on 2026-09-01 listed one
+    // by accident and only found out at the deposit, where the transfer failed
+    // simulation with Core's `IncorrectAccount` — by which point the draft had
+    // taken the asset's listing slot.
+    stubChain({
+      ...healthyChain(seller.address),
+      getAsset: { id: asset, ownership: { owner: seller.address }, burnt: true, grouping: [] },
+    });
+
+    const response = await POST(draftRequest(body(seller, asset)));
+    const refusal = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(refusal.error).toMatch(/burn/i);
   });
 });
 

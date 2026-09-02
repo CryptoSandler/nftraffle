@@ -221,14 +221,32 @@ export async function POST(request: Request): Promise<Response> {
    * reference, or who is listing something they already sold, finds out before
    * they are asked to send anything anywhere.
    */
-  const owner = await chain.assetOwner(asset);
-  if (owner === null) {
+  const metadata = await chain.assetMetadata(asset);
+  if (metadata === null || metadata.owner === null) {
     return json(
       { error: "That asset could not be read on chain. Check the reference." },
       { status: 404, headers: NO_STORE },
     );
   }
-  if (!chain.sameAddress(owner, sellerWallet)) {
+  /**
+   * A BURNT ASSET STILL HAS AN OWNER, so this check cannot be folded into the
+   * one below.
+   *
+   * DAS answers `ownership.owner` for a Core asset that has been burned, and
+   * the devnet end-to-end run on 2026-09-01 listed one without noticing: the
+   * draft was created, took the asset's listing slot, and the seller found out
+   * one step later when the deposit failed simulation with Core's
+   * `IncorrectAccount`. Refusing here costs nothing — the metadata read already
+   * happened — and turns a confusing failure at the wallet into a sentence at
+   * the form.
+   */
+  if (metadata.burnt) {
+    return json(
+      { error: "That asset has been burned, so it cannot be raffled.", reason: "burnt" },
+      { status: 409, headers: NO_STORE },
+    );
+  }
+  if (!chain.sameAddress(metadata.owner, sellerWallet)) {
     return json({ error: "That asset is not held by this wallet." }, { status: 409, headers: NO_STORE });
   }
 

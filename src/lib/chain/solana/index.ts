@@ -1,5 +1,5 @@
 import { formatNative, solanaRpcUrls } from "../../payments/config";
-import type { AssetMetadata, AssetRef, ChainAdapter } from "../adapter";
+import type { AssetRef, ChainAdapter } from "../adapter";
 import { readAssetTransfer } from "./asset-transfer";
 import {
   LAMPORTS_PER_SOL,
@@ -74,12 +74,15 @@ export const solanaAdapter: ChainAdapter = {
 
   assetOwner: (asset) => dasOwner(asset.raw),
 
-  async assetMetadata(asset): Promise<AssetMetadata | null> {
-    const found = await dasAsset(asset.raw);
-    return found
-      ? { name: found.name, image: found.image, collection: found.collection, owner: found.owner }
-      : null;
-  },
+  /**
+   * Straight through, deliberately.
+   *
+   * This used to rebuild the object field by field, which silently dropped
+   * every field added to `AssetMetadata` afterwards — `burnt` was dropped that
+   * way on 2026-09-01 and the compiler could not see it, because the literal
+   * was complete for the type as it stood when it was written.
+   */
+  assetMetadata: (asset) => dasAsset(asset.raw),
 
   currentHeight: currentSlot,
   blockAt: blockAtSlot,

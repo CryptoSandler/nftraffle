@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { ListRaffle } from "../../../components/ListRaffle";
+import { classifyEndpoints } from "../../../lib/chain/solana/cluster";
+import { solanaRpcUrls } from "../../../lib/payments/config";
 import { adapterFor } from "../../../lib/chain/registry";
 import { houseFeeBps, raffleListingFee } from "../../../lib/payments/config";
 import { surfaceRefusal } from "../../../lib/surfaces";
@@ -50,13 +53,38 @@ export default function NewRafflePage() {
           </dl>
           <p className="mt-4 text-sm text-quiet">
             There is no minimum. The draw runs on whatever sold, so a raffle that sells one ticket
-            transfers the prize for one ticket&apos;s price. The next screen shows what you would
-            receive at one ticket and at a sell-out before you commit to anything.
+            transfers the prize for one ticket&apos;s price. Decide the price on that basis, not on
+            a sell-out.
           </p>
-          <p className="mt-8 text-quiet">
-            The listing flow is not built yet. Nothing on this page charges anything, and no asset
-            has been asked for.
-          </p>
+          <div className="mt-8">
+            {/*
+              * The cluster is CLASSIFIED SERVER-SIDE and passed down as a name.
+              * Never the endpoint: `/api/rpc` exists so a paid provider's URL
+              * stays server-side, and handing it to the browser to label a
+              * screen would undo that from the other direction. `isProduction`
+              * comes from VERCEL_ENV for the same reason.
+              *
+              * This matters more here than on the buy panel: a listing signs a
+              * transaction that moves an NFT into escrow, and a prize sent to a
+              * devnet escrow because the proxy was pointed there is not
+              * refundable (CLAUDE.md).
+              */}
+            {listing.ok && house.ok ? (
+              <ListRaffle
+                proxyCluster={classifyEndpoints(solanaRpcUrls())}
+                isProduction={process.env.VERCEL_ENV === "production"}
+                listingFeeDisplay={chain.formatNative(listing.amount)}
+                houseFeeBps={house.bps}
+                nativeSymbol={chain.nativeSymbol}
+              />
+            ) : (
+              /* Unreachable while the surface is open — it requires both — and
+                 written as a refusal rather than a `!` so it stays that way. */
+              <p className="text-quiet">
+                Listing is not available right now. Nothing has been charged.
+              </p>
+            )}
+          </div>
         </>
       )}
     </main>
