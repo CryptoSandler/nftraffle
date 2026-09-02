@@ -91,22 +91,35 @@ export function useSolanaWallet() {
    * not send. Used once, to prove the seller controls the wallet they are
    * listing from (`lib/wallet/solana-binding.ts`).
    */
-  const signMessageText = useCallback(
-    async (message: string): Promise<string> => {
+  const signMessageBytes = useCallback(
+    async (message: Uint8Array): Promise<Uint8Array> => {
       if (!connection) throw new Error("No wallet is connected.");
       const feature = connection.wallet.wallet.features[SOLANA_SIGN_MESSAGE] as
         | SignMessageFeature
         | undefined;
       if (!feature?.signMessage) {
-        throw new Error("This wallet cannot sign messages, so it cannot list a raffle.");
+        throw new Error("This wallet cannot sign messages, so it cannot list or launch.");
       }
       const [{ signature }] = await feature.signMessage({
         account: connection.account,
-        message: new TextEncoder().encode(message),
+        message,
       });
-      return base58(signature);
+      return signature;
     },
     [connection],
+  );
+
+  /**
+   * The same thing for a message a person reads.
+   *
+   * Built on the bytes rather than beside them: the launchpad's upload signs
+   * opaque data items and the bindings sign a sentence, and one implementation
+   * means a wallet that works for one works for the other.
+   */
+  const signMessageText = useCallback(
+    async (message: string): Promise<string> =>
+      base58(await signMessageBytes(new TextEncoder().encode(message))),
+    [signMessageBytes],
   );
 
   /**
@@ -181,7 +194,16 @@ export function useSolanaWallet() {
     [connection],
   );
 
-  return { connection, connecting, connect, disconnect, signAndSendWire, signMessageText, canSignMessage };
+  return {
+    connection,
+    connecting,
+    connect,
+    disconnect,
+    signAndSendWire,
+    signMessageText,
+    signMessageBytes,
+    canSignMessage,
+  };
 }
 
 function toBase64(bytes: Uint8Array): string {

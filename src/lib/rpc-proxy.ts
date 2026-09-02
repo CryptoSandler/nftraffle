@@ -52,8 +52,11 @@ import type { ChainId } from "./chain/adapter";
  * - getBlock, for the blockhash of the slot announced when the raffle was
  *   created.
  *
- * DAS, for every image and name in this product — there is no upload path and
- * no form field that takes a URL, so this is where metadata comes from:
+ * DAS, for the name and image of every asset this product displays. That used
+ * to be the ONLY source, because there was no upload path and no field taking a
+ * URL; the launchpad has both now (`lib/launch/irys.ts`), and what has not
+ * changed is that the bytes never touch this server and a URI is refused unless
+ * `image-hosts.ts` says a browser could render it:
  * - getAsset, getAssetsByOwner, getAssetsByGroup.
  *
  * Nothing else. Not getProgramAccounts, not getSignaturesForAddress: both turn
@@ -61,6 +64,24 @@ import type { ChainId } from "./chain/adapter";
  * can point their app at and we pay for.
  */
 const SOLANA_METHODS = new Set<string>([
+  /**
+   * `getBalance` is here for ONE caller: the creator's Irys upload, which asks
+   * what the paying wallet holds before it deposits (`lib/launch/irys.ts`).
+   *
+   * Added 2026-09-02, after an end-to-end run of that upload came back
+   * `400 That RPC method is not available through this proxy` — the guard
+   * working, on a method the feature genuinely needs. It reads one address's
+   * lamports and nothing else: it cannot enumerate, cannot search, and costs a
+   * provider the same as the account read already on this list.
+   */
+  "getBalance",
+  /**
+   * `getFeeForMessage` joins it for the same caller and by the same route: the
+   * refusal log named it on the next run. It prices a message that is already
+   * in hand and returns a number; this server's own preflight has always used
+   * it (`chain/solana/preflight.ts`), so it opens nothing new to a provider.
+   */
+  "getFeeForMessage",
   "getLatestBlockhash",
   "sendTransaction",
   "getSignatureStatuses",
@@ -303,6 +324,17 @@ function safeEntry(id: JsonRpcId, entry: { result?: unknown; error?: unknown }):
   return { jsonrpc: "2.0", id, error: GENERIC_UPSTREAM_ERROR };
 }
 
+/** The method names in a payload, for the operator's log line. Never for a response. */
+function refusedMethods(payload: unknown): string[] {
+  const calls = Array.isArray(payload) ? payload : [payload];
+  return calls
+    .map((call) =>
+      typeof call === "object" && call !== null ? (call as { method?: unknown }).method : null,
+    )
+    .filter((method): method is string => typeof method === "string")
+    .slice(0, 5);
+}
+
 /**
  * Forwards an already-whitelisted payload to the configured Solana endpoint
  * and answers with a response THIS proxy constructs — never one relayed
@@ -454,6 +486,18 @@ export async function proxyRpc(request: Request, chain: ChainId): Promise<Respon
   }
 
   if (!isWhitelistedRequest(payload, chain)) {
+    /**
+     * THE METHOD GOES TO THE LOG, never to the caller.
+     *
+     * The visitor gets one sentence, because which methods are allowed is
+     * reconnaissance. The operator gets the name, because without it a
+     * legitimate integration that needs one more method is a `400` with
+     * nothing to act on — which is exactly what happened while wiring the
+     * creator's Irys upload on 2026-09-02, twice.
+     */
+    console.error(
+      `rpc-proxy [${chain}]: refused method ${JSON.stringify(refusedMethods(payload))}`,
+    );
     return json(
       { error: "That RPC method is not available through this proxy." },
       { status: 400, headers: NO_STORE },

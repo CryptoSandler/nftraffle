@@ -121,3 +121,66 @@ exactly what an Irys upload produces.
 its name (`hiddenSettings`). Config lines would be one more transaction per ten
 items — a hundred wallet prompts for a thousand-item launch — and arrow one of
 the loop is "instant launch". Noted at the code as a ceiling, not hidden.
+
+
+---
+
+# The creator's upload to Irys — 2026-09-02
+
+`npm run e2e:irys` drives `src/lib/launch/irys.ts` — **the module the browser
+uses** — with a keypair in place of a wallet. The Irys client asks a wallet for
+three things (a public key, a message signature, a way to send a transaction),
+so `UploadWallet` is that shape and a keypair can play the part. What is
+verified is the real path rather than a rehearsal of it.
+
+```
+image bytes: 321956
+  Connecting to permanent storage…
+  Uploading the art…
+  Paying the storage network…
+image:    https://gateway.irys.xyz/8Cxrmoo5oBK14f1peNuvyUJEsMmAvymEXNQhSVKDKwuv
+metadata: https://gateway.irys.xyz/D9LsPpUHENbefF5QRqmk5PygoPhX434EWtgWgwEMPuvd
+served: 200 | final host: …devnet-1.datasprite-cdn.com
+metadata address passes the launch check: true
+OK: uploaded, served, and renderable.
+```
+
+## What it found
+
+**1. The Irys client does not fund itself, and small files hide it.** A
+one-pixel PNG and a 40 KB image both uploaded on a wallet with nothing
+deposited, so the first version of this module had no funding step and looked
+finished. A real 322 KB collection image came back `402 error: Not enough
+balance for transaction` — which is the size every actual launch would have hit,
+at the last step, after the creator had filled in the whole form. The module now
+quotes the price, reads the balance and deposits the difference plus a fifth,
+**once for both uploads**.
+
+**2. The proxy refused two methods the upload needs, and could not say which.**
+`getBalance` and `getFeeForMessage` were not on `/api/rpc`'s whitelist, and the
+refusal returned one sentence to the caller and **logged nothing**, so an
+operator had a `400` with nothing to act on. The refusal now logs the method
+name — to the server, never to the caller, because which methods are allowed is
+reconnaissance. Both were then added, each with the reason at the line: they
+read one address's lamports and price a message already in hand, and neither
+turns the proxy into an indexer.
+
+**3. `getTransaction` was NOT added, and that costs thirty seconds.** The client
+confirms its funding transfer with it, waits, prints `didn't finalize after 30
+seconds`, and proceeds — Irys credits the balance regardless. Opening
+`getTransaction` to any browser would make the proxy a general transaction
+lookup on a paid provider, for a progress bar. The deposit happens once per
+launch, so the wait does too.
+
+## What it did NOT cover
+
+**The three prompts a creator actually sees.** `docs/wallet-warnings.md` now has
+them as a three-line check, and the third one is the one worth an opinion:
+**Irys data items are signed as opaque bytes**, so Phantom renders binary rather
+than a sentence — unlike every other message this product asks anyone to sign.
+Nothing is approved and nothing moves, and it still looks like the thing people
+are warned about.
+
+**The pasted-address path stays** until that check has been run: a creator can
+skip the upload entirely by pasting a metadata address they already have, and
+`checkLaunchChoices` refuses anything a browser could not render either way.

@@ -185,6 +185,35 @@ it a transaction that cannot succeed is.
 raffle (the table below), but neither has been seen with a wallet actually open.
 That is the part only a person with Phantom can do.*
 
+## The creator's upload, in three lines
+
+**The second thing only a person with a wallet can check**, and the newer one:
+`/launch` now uploads the art to Irys from the browser, signed and paid for by
+the creator. Devnet only, about five minutes.
+
+1. **Open** `http://localhost:3101/launch` with `.env.rehearsal` loaded, connect
+   Phantom in Testnet Mode → Solana Devnet, and choose an image **over 100 KB** —
+   under that Irys takes the upload without a deposit and the interesting prompt
+   never appears.
+2. **Watch the deposit prompt.** It is an ordinary SOL transfer of a few
+   thousand lamports to Irys, and it must look like one: one signature, a
+   visible amount, Phantom saying Devnet, **no red "may be malicious" screen**.
+   If a red screen appears, the preflight rule has been broken by a path that
+   does not go through our own builder — report it rather than approving.
+3. **Then watch the two message prompts, because they are the ugly ones.** Irys
+   signs each upload as a data item, and what Phantom renders is **opaque
+   bytes, not a sentence** — unlike every other message this product asks for
+   (`lib/wallet/solana-binding.ts` builds those to be read). Nothing is being
+   approved and no funds move, but a person who has been warned about wallet
+   drainers is right to hesitate at it. **What to decide after seeing it:**
+   whether that prompt is acceptable as the price of the creator keeping custody
+   of their own art, or whether the upload belongs somewhere else.
+
+*Verified without a wallet on 2026-09-02 — `npm run e2e:irys` drives the same
+module with a keypair standing in for Phantom, uploads a real 322 KB image to
+devnet through this deployment's own RPC proxy, and reads it back from the
+gateway. What that cannot show is the three prompts above.*
+
 ## Before any change to the money path: rehearse with a real wallet
 
 **A green suite does not tell you what a wallet does.** Every test in this

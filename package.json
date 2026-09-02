@@ -14,7 +14,8 @@
     "db:up": "npm run db:migrate:test && npm run db:migrate:preview",
     "db:migrate:preview": "tsx scripts/migrate.mts --preview",
     "rehearse:robinhood": "tsx scripts/robinhood-rehearsal.mts",
-    "rehearse:launch": "tsx scripts/launch-rehearsal.mts"
+    "rehearse:launch": "tsx scripts/launch-rehearsal.mts",
+    "e2e:irys": "tsx scripts/irys-upload-e2e.mts"
   },
   "dependencies": {
     "@irys/web-upload": "^0.0.15",

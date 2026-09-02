@@ -4,6 +4,7 @@ import { useState } from "react";
 import { isLocalHostname, paymentSafety, type ProxyCluster } from "../lib/chain/solana/cluster";
 import { walletErrorMessage } from "../lib/checkout";
 import { bindingFieldsFor, startsAtFromNow } from "../lib/listing";
+import { uploadLaunchMetadata, type UploadWallet } from "../lib/launch/irys";
 import { sellerBindingMessage } from "../lib/wallet/solana-binding";
 import { useSolanaWallet } from "./useSolanaWallet";
 import { useSolanaWallets } from "./useSolanaWallets";
@@ -55,6 +56,7 @@ export function LaunchCollection({
   const [name, setName] = useState("");
   const [symbol, setSymbol] = useState("");
   const [uri, setUri] = useState("");
+  const [image, setImage] = useState<File | null>(null);
   const [itemsAvailable, setItems] = useState(100);
   const [price, setPrice] = useState("");
   const [mintLimit, setMintLimit] = useState(5);
@@ -64,7 +66,7 @@ export function LaunchCollection({
 
   const signingChain = proxyCluster === "unknown" ? "unknown" : proxyCluster;
   const wallets = useSolanaWallets(signingChain);
-  const { connection, connecting, connect, signAndSendWire, signMessageText, canSignMessage } =
+  const { connection, connecting, connect, signAndSendWire, signMessageText, signMessageBytes, canSignMessage } =
     useSolanaWallet();
 
   const safety = paymentSafety({
@@ -75,9 +77,64 @@ export function LaunchCollection({
   });
   if (!safety.ok) return <Notice>{safety.message}</Notice>;
 
+  /**
+   * Puts the art and its metadata on Irys, signed and paid for by the creator.
+   *
+   * **Returns the metadata address, and does not touch this server.** The bytes
+   * go from the browser to Irys (spec §0.2); what reaches us afterwards is a
+   * URI, checked against `image-hosts.ts` like any other.
+   */
+  async function upload(): Promise<string | null> {
+    if (!connection || !image) return null;
+    const wallet: UploadWallet = {
+      address: connection.account.address,
+      signMessageBytes,
+      signAndSendSerialized: (transaction) =>
+        signAndSendWire(bytesToBase64(transaction), signingChain, { forceSignOnly: true }),
+    };
+    const result = await uploadLaunchMetadata({
+      wallet,
+      image: {
+        bytes: new Uint8Array(await image.arrayBuffer()),
+        contentType: image.type || "application/octet-stream",
+      },
+      name: name.trim(),
+      symbol: symbol.trim(),
+      description: "",
+      // From the cluster we are signing on, not from the safety verdict: that
+      // one is narrowed by the early return above and not inside this closure.
+      devnet: signingChain === "solana:devnet",
+      // OUR proxy. The browser never learns a provider's endpoint, and this is
+      // the same one every other signature here goes through.
+      rpcUrl: `${window.location.origin}/api/rpc/solana`,
+      onStep: (note) => setPhase({ step: "working", note }),
+    });
+    return result.metadataUri;
+  }
+
   async function launch() {
     if (!connection) return;
     try {
+      let metadataUri = uri.trim();
+      if (image) {
+        try {
+          metadataUri = (await upload()) ?? "";
+        } catch (error) {
+          console.error(error);
+          setPhase({
+            step: "error",
+            message:
+              "That upload did not finish, so nothing has been launched. You can try again, or " +
+              "paste an address you have already uploaded.",
+          });
+          return;
+        }
+      }
+      if (!metadataUri) {
+        setPhase({ step: "error", message: "Choose an image to upload, or paste a metadata address." });
+        return;
+      }
+
       setPhase({ step: "working", note: "Waiting for your wallet to sign…" });
       /**
        * The metadata URI stands where an asset would: it is what identifies
@@ -86,7 +143,7 @@ export function LaunchCollection({
       const fields = bindingFieldsFor({
         domain: window.location.host,
         address: connection.account.address,
-        prizeAsset: uri.trim(),
+        prizeAsset: metadataUri,
       });
       let signature: string;
       try {
@@ -105,7 +162,7 @@ export function LaunchCollection({
           name: name.trim(),
           symbol: symbol.trim(),
           description: "",
-          uri: uri.trim(),
+          uri: metadataUri,
           itemsAvailable,
           price: price.trim(),
           mintLimit,
@@ -228,10 +285,28 @@ export function LaunchCollection({
             <input className="control w-40" value={symbol} onChange={(e) => setSymbol(e.target.value)} required maxLength={10} />
           </Field>
           <Field
-            label="Metadata address"
-            hint="The permanent address of your metadata JSON, on Irys or Arweave. Every item shares it."
+            label="Art"
+            hint="Uploaded to Irys from this browser, signed and paid for by your wallet. It never passes through this site."
           >
-            <input className="control figure w-full" value={uri} onChange={(e) => setUri(e.target.value)} required spellCheck={false} />
+            <input
+              className="control w-full"
+              type="file"
+              accept="image/*"
+              onChange={(e) => setImage(e.target.files?.[0] ?? null)}
+            />
+          </Field>
+
+          <Field
+            label="…or a metadata address you already have"
+            hint="Skip the upload by pasting the permanent address of your metadata JSON. Ignored when a file is chosen."
+          >
+            <input
+              className="control figure w-full"
+              value={uri}
+              onChange={(e) => setUri(e.target.value)}
+              spellCheck={false}
+              disabled={image !== null}
+            />
           </Field>
           <Field label="Supply" hint="How many can be minted, at most 1,000.">
             <input className="control figure w-32" type="number" min={1} max={1000} value={itemsAvailable} onChange={(e) => setItems(Math.max(1, Number(e.target.value) || 1))} required />
@@ -292,6 +367,13 @@ function Field({ label, hint, children }: { label: string; hint: string; childre
       <span className="block text-sm text-quiet">{hint}</span>
     </label>
   );
+}
+
+/** Bytes to base64 without pulling in a polyfill, for handing a wallet a transaction. */
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
 }
 
 function Notice({ children }: { children: React.ReactNode }) {
