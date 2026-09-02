@@ -872,6 +872,50 @@ the dependency comes out. Check when the launchpad is next touched.
 
 ---
 
+## Q22 — Two of the three suite locks, and the third waits for a reason
+
+**Decided 2026-09-02: `assertNoForeignSuite` stays out of this repository until
+this repository's suite actually drives a browser.**
+
+`~/.claude/GATES.md` describes **three** locks, each answering a different
+question, and after merging `tooling/suite-lock` this repository has two:
+
+1. **The machine lock** — `~/.claude/suite.lock`, taken in `globalSetup`. Is any
+   other measuring suite running anywhere on this machine? It waits. **Here.**
+2. **The browser net** — `assertNoForeignSuite`. Is a browser-driving run alive
+   in another repository? Those take `/tmp/claude-playwright-e2e.lock` rather
+   than the suite lock, they compete for the same cores, and this is the only
+   contention the machine lock cannot see. **Not here.**
+3. **The database advisory lock** — is another run of THIS suite using THIS
+   database? A file lock cannot answer that from a second machine. **Here**, in
+   `vitest.global-setup.ts`, and still last.
+
+**This is a decision, not an omission, and that is the whole point of writing it
+down.** A reader who opens GATES.md, greps this repository, and finds two of
+three has found exactly the shape of a defect — and would be wrong. The rule in
+`CLAUDE.md` cuts both ways: *open the document, and check it against the code it
+claims to govern; where they disagree, one of them is a bug, and saying which is
+the verdict.* The verdict here is that the code is right.
+
+**Why it is right.** Lock 2 protects a suite that drives a browser from another
+repository's browser run. `npm test` here drives no browser — 45 files, none of
+them Playwright — so the guard would have nothing of ours to protect. Its cost
+is not zero: it REFUSES rather than waiting, so a false positive turns somebody
+else's stale harness into a red run in this repository, for CPU we were not
+using. GATES.md records that failure mode directly, from the draft that scanned
+processes instead: six orphaned Chromes, `ppid 1`, six days old, at 0.0% CPU,
+would have refused every run here.
+
+### Trigger to revisit
+
+**The first test file in this repository that drives a browser.** At that moment
+lock 2 stops being theoretical and the reasoning above inverts: our run becomes
+the thing that needs protecting, and the copy comes in from
+`milliondollarpage` — copied, not rewritten, for the same reason the machine
+lock was.
+
+---
+
 ## Still open
 
 Nothing from the twelve above. New questions go here as they arise, in the same
