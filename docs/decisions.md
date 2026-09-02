@@ -872,6 +872,103 @@ the dependency comes out. Check when the launchpad is next touched.
 
 ---
 
+---
+
+# The visual direction — decided 2026-09-02
+
+## Q22 — POPMINT, named `popmint`, and Q19's first answer reopened to allow it
+
+Three complete directions were built as running pages and put to the owner on
+2026-09-02. The owner chose **direction 3, POPMINT** — the toy register — and
+named the product **`popmint`**, domain **`popmint.fun`**, which the owner buys.
+
+The other two are discarded and kept: `docs/design-vitrine.md` (editorial) and
+`docs/design-mintdesk.md` (instrument), each marked with the date and the SHA of
+the branch that was deleted, with their screenshots at 390 and 1440 in
+`docs/design-shots/`.
+
+### 1. The direction
+
+**Arrow one of `DESIGN.md` §1 is aimed at a creator, not a trader**, and that is
+what decided it. A gallery register tells somebody their work is about to be
+judged; an instrument register tells them it is not for them. Only the toy reads
+as an invitation to a person who has art and has never minted anything.
+
+**What it costs, stated rather than hedged:** it is the easiest of the three to
+mistake for the register this product has decided not to be. Magic Eden sells
+packs and "Lucky Buy" in magenta behind a mascot, and loud is one decision away
+from that. The distance is held by `DESIGN.md` §2 and §6 and by the tests behind
+them — not by taste, and not by anyone remembering.
+
+**What would make this worth revisiting:** evidence that creators arrive and
+bounce while traders arrive and stay. That reverses which arrow the home page is
+for, and the editorial or instrument register would then be the honest one. Both
+arguments are on disk for exactly that day.
+
+### 2. Q19's FIRST answer is reopened and replaced
+
+Q19 answer 1 gave the accent **one** job — the clock — and accepted a
+black-on-white primary action as the price. This direction cannot exist under
+that rule: its whole bet is that **one loud colour is both the brand and the
+thing you press**.
+
+**The replacement, which is a rule and not a relaxation:** the accent appears in
+exactly two places, `.pop-action` and `.clock`. Not a heading, not body text, not
+a border, not a state, not an error. `design-tokens.test.ts` greps every source
+file and fails on any other use of `--accent`, and asserts `globals.css` uses
+`var(--accent)` exactly twice.
+
+**A third selector needs a Q23, not an edit.** That sentence is in the test, at
+the place somebody would otherwise just widen it.
+
+### 3. Q19's SECOND answer is NOT reopened
+
+**Zero casino stands, unchanged and unqualified.** No gold, no red urgency, no
+green success, no confetti, no spin, no bounce, no scale on a win, nothing that
+moves after a result, no animation on any number, no language borrowed from
+gambling marketing. The motion budget stays exactly where `DESIGN.md` §6 put it:
+`120ms` on colour, and `90ms` on `transform` limited to two classes and two
+pixels, which is a **press** — and a press happens before an outcome.
+
+This distinction is the whole point of writing Q22 down rather than letting the
+direction override Q19 quietly: **widening the accent is a decision about a brand
+colour. It is not permission for a register.** Anyone reading "Q19 was reopened"
+without this paragraph would draw the wrong conclusion, which is how confetti
+arrives.
+
+### 4. Q19's third answer is resolved, and the rename is deliberately half-done
+
+Q19 answer 3 said the wordmark waits for a name worth setting. There is one now.
+
+**The wordmark is set in type, never drawn** — Archivo Black, in the markup. No
+logo file exists and none is made until the domain is bought, so `DESIGN.md` §11's
+prohibition on baking the name into a generated image is intact.
+
+**The rename stops halfway on purpose.** Copy says `popmint`; `package.json` and
+`SITE_URL` still say `nftraffle` and change when the domain is bought. `SITE_URL`
+is what a deployment tells the world it is, and pointing it at a domain nobody
+owns produces dead links in the surfaces where a dead link reads as the product
+being fake — a raffle's public page, a verification link, a payout record.
+`DESIGN.md` §11 carries the table of which of the three places is in which state.
+
+### The names that were checked, and the method
+
+| candidate | `.fun` | outcome |
+|---|---|---|
+| **popmint** | free | **chosen** |
+| sticker | free | not chosen |
+| poppy | free | not chosen |
+| vitrine, recto, cadre | free | discarded with direction 1 |
+| mintdesk, readout, dispatch | free | discarded with direction 2 |
+| bodega, firstmint, supply, plinth | registered | dropped |
+| atelier, hangar, mintbox | no answer | **not** treated as free |
+
+Checked over RDAP on 2026-09-02 with `pump.fun` as a registered control and a
+nonsense name as a free control, so a broken lookup would have shown both reading
+the same. **A query that did not answer was never counted as available** — "free"
+and "could not tell" are different results, and only one of them is safe to act
+on.
+
 ## Still open
 
 Nothing from the twelve above. New questions go here as they arise, in the same

@@ -86,17 +86,25 @@ DOCUMENT and asserts all three agree.** A palette that lives only in CSS is one
 nobody can argue with; one that lives only in prose is one nobody applies. A hex
 changed in one place fails the suite.
 
-### The register: an instrument, not a table
+### The register: a toy, and still zero casino
 
 This product sells chance for money, and the fastest way to look like the thing
 people are right to be suspicious of is to dress like it. So: **zero casino.**
 No gold, no red urgency, no green success, no animation on a number, nothing
 that borrows from gambling marketing.
 
-What it dresses as instead is a **verification instrument** — something you read
-a measurement off. The nearest relative is the "Instrumento" register kolscan
-uses, and the difference is deliberate: that is an instrument for watching other
-people's money move, and this one has exactly one moving part, the clock.
+What it dresses as instead is a **toy**: one loud colour, round corners, and
+three doors you press. Chosen 2026-09-02 (`docs/decisions.md` Q22) over an
+editorial register and an instrument register, and chosen for arrow one of §1.
+A gallery tells a creator their work is about to be judged; a terminal tells them
+it is not for them. This one says *press this*, and it is the only one of the
+three that somebody with art and no wallet reads as an invitation.
+
+**Loud and casino are not the same axis, and this is the direction where that
+distinction costs something.** Magic Eden sells packs and "Lucky Buy" in magenta
+behind a 3D mascot, and loud is one bad decision away from that. The distance is
+held by the rules in this section and by §6 — not by taste, and not by anybody
+remembering.
 
 ### The tokens
 
@@ -110,17 +118,26 @@ people's money move, and this one has exactly one moving part, the clock.
 | `edge` | `#786D95` | `#6E6490` | the border of a control a person can act on |
 | `accent` | `#431BBB` | `#B79DFF` | the brand and the action: it is what you press, and the clock |
 
-**The accent has one job and it is the clock.** Not buttons, not links, not
-errors, not the buy action. An accent that appears on ordinary controls stops
-meaning anything; this one is the only coloured thing on a page, so the eye goes
-to the number that is running out. **The primary action is `ink` on `ground` —
-black on white** — which is the cost of that rule, accepted rather than
-worked around.
+**The accent has two jobs: the action and the clock.** `.pop-action` and
+`.clock`. Not a heading, not body text, not a border, not a state, not an error.
+
+This **reverses Q19's first answer**, which gave the accent one job and accepted
+a black-on-white primary action as the price. The owner reopened it and answered
+it again on 2026-09-02 — `docs/decisions.md` Q22 — rather than letting a
+direction quietly override a recorded decision. What replaces it is still a rule
+and still enforced: `design-tokens.test.ts` greps every source file and fails on
+any other use of `--accent`.
+
+**What did NOT reopen is Q19's second answer.** Zero casino stands unchanged.
+Widening the accent is a decision about a brand colour; it is not permission for
+a register, and §6 is where that line is actually held.
 
 **The hue is a decision, not a preference.** Red and gold are the casino
 register outright. Green reads as "go", and as money. Blue reads as a hyperlink,
-and a countdown is not one. Teal at this darkness reads as measurement — a
-gauge, a marked scale — which is what a countdown is here.
+and neither a countdown nor a button is one. **Magenta and pink are Magic Eden's**,
+and being mistaken for them is this direction's whole risk. Violet is the nearest
+loud hue that is none of those, and at these two darknesses it still clears 8:1 on
+both surfaces in both modes — which a lighter, louder violet does not.
 
 **Dark mode is a real mode, not an inversion.** `prefers-color-scheme` picks it;
 both columns were measured separately, because a palette inverted arithmetically
@@ -156,23 +173,44 @@ of something a person clicks, which WCAG 1.4.11 puts at 3:1.
 measured contrast into an unmeasured one, and every number in this section would
 stop meaning anything.
 
-### What is still not here
+### The wordmark
 
-**No wordmark** (§11): the name is a placeholder and the domain is not bought.
-The home page has no identity mark, and that is correct until there is a name
-worth setting.
+**Set in type, never drawn** (§11). The name is `popmint`, decided 2026-09-02,
+and the home page sets it in the display face rather than in an image — so a
+rename edits a string and nothing has to be redrawn. No logo file exists, and
+none should be made until the domain is bought.
 
-## 3. Typography — direction
+## 3. Typography — NORMATIVE
 
 **Google Fonts only**, loaded through `next/font/google`, with no system stack
 anywhere. A face that resolves differently per machine is a design that does not
 exist.
 
-Two families: one for words, one for numbers. This product is dense with figures
-that must be compared down a column — ticket prices, lamport amounts, basis
-points, ticket counts, slot numbers — and proportional digits make that a chore.
-The numeric face is tabular and it is used for **every figure without exception**,
-including inside sentences.
+**Three families, and each has a job it does not share:**
+
+| family | variable | job |
+|---|---|---|
+| `Inter` | `--font-sans` | sentences |
+| `IBM Plex Mono` | `--font-mono` | every figure, without exception, including inside sentences |
+| `Archivo Black` | `--font-display` | the wordmark, every heading, and the action — never a sentence, never a figure |
+
+The mono is not decoration. This product is dense with figures that get compared
+down a column — ticket prices, lamport amounts, basis points, ticket counts, slot
+numbers — and proportional digits make that a chore.
+
+**Archivo Black arrived with the direction, and it reaches type through exactly
+two doors.** `.display`, which every heading and the wordmark carry, and
+`.pop-action`, which is the button. One weight, and no third door: a display face
+that starts appearing on labels, meta lines or a table header is a page shouting
+at its own reader, and `design-form.test.ts` fails on a third rule using
+`var(--font-display)`.
+
+**It never carries a sentence and never carries a figure.** A sentence set in a
+display face is slower to read, and a figure set in one is not tabular — §3's
+whole reason for a mono is that figures get compared down a column.
+
+§10 records why an expressive face was refused until the mechanism stopped moving;
+it stopped on 2026-08-31, and this is the face chosen afterwards.
 
 ## 4. Form — NORMATIVE
 
@@ -226,15 +264,22 @@ anyway.
 **Two page widths, chosen by how the page is read.** `max-w-3xl` for scanning a
 list; `max-w-2xl` for reading one thing. Nothing else.
 
-**Two repeating patterns, and everything is one of them:**
+**Three repeating patterns, and everything is one of them:**
 
 1. **The listing row** — a 64px square image, then a title, a meta line, and the
    clock. Fixed image size across every listing surface, so rows align down the
-   page whether or not the images loaded.
+   page whether or not the images loaded. It is what every surface past the home
+   page uses for a list.
 2. **The fact list** — a two-column grid, label in `quiet` and value in `ink`,
    with every value in the tabular face. It is what the raffle page, the verify
    page and the payout queue all use, because they are all the same thing: a
    list of things somebody may need to check.
+3. **The card** — a square image with the panel's corner radius, then a title and
+   one figure. **The home page only**, and that is the constraint rather than an
+   accident: the home page is the single surface aimed at somebody who has not yet
+   decided to read anything, and a card trades density for an image big enough to
+   be the reason they stay. A card anywhere past the home page is a listing row
+   that got bigger for no stated reason.
 
 **One vertical rhythm.** Sections are separated by `mt-10`, blocks inside a
 section by `mt-3`, and rows by their own padding. Three numbers, so a page that
@@ -355,10 +400,10 @@ timer reaching zero on a page that happens to be open.
 
 ## 10. Why the interface was plain, and what changed
 
-**Closed 2026-09-01.** The condition this section set has been met, so §2 is
-built and normative. What follows is the original reasoning, kept because it is
-the argument for why the palette arrived when it did rather than earlier — and
-because the same test applies to §3–§6, which are still direction.
+**Closed 2026-09-01, and dressed 2026-09-02.** The condition this section set has
+been met, so §2 is built and normative — and §3–§6 followed it. What follows is
+the original reasoning, kept because it is the argument for why the palette
+arrived when it did rather than earlier.
 
 The mechanism is not settled enough to dress. The draw's public page, the escrow
 deposit flow and the payout queue are the surfaces that decide whether anyone
@@ -374,16 +419,49 @@ a mechanism that has stopped changing.
 the mechanism stopped moving; legibility came first (names, images, a clock) and
 the palette followed once there was real content to measure a palette against.
 Every ratio in §2 was computed rather than chosen, and a guardian test reads this
-document to keep the three copies honest. §4–§6 — form, layout, motion — are
-still direction, and the same rule holds for them: they arrive measured or not at
-all.
+document to keep the three copies honest.
 
-## 11. The name is a placeholder
+**And then it was dressed, once.** Three complete directions were built on
+2026-09-02 — an editorial one, an instrument one, and a toy — as running pages
+rather than mockups, because a mockup of this product hides the only thing worth
+judging: what a page looks like with real raffles, real images and a real clock on
+it. The owner chose the toy. `docs/decisions.md` Q22 records the choice;
+`docs/design-vitrine.md` and `docs/design-mintdesk.md` keep the two that lost,
+marked discarded with the date, because a rejected argument that gets thrown away
+is one the next person rebuilds from scratch.
 
-`nftraffle` is a working name. The domain is not bought.
+**The bet this direction makes.** Arrow one of §1 is aimed at a creator, not a
+trader. A gallery register tells that person their work is about to be judged; an
+instrument register tells them it is not for them. This one says *press this*, and
+it is the only one of the three that somebody with art and no wallet reads as an
+invitation. **What it gives up is stated and not hedged:** it is the easiest of the
+three to mistake for the register this product has decided not to be, and §2 and §6
+are where that distance is held — by rules with tests behind them, not by taste.
 
-It lives in exactly three places: `package.json`, user-facing copy, and
-`SITE_URL`. It is deliberately **not** in any database value, any migration, any
-column name, any cookie name that would need a migration to change, or any
-generated image. A rename is a find-and-replace over copy plus one environment
-variable, and it stays that way.
+## 11. The name — decided, and the rename deliberately half-done
+
+**The name is `popmint` and the domain is `popmint.fun`.** Decided by the owner
+2026-09-02 (`docs/decisions.md` Q22). **The domain is not bought yet**, and until
+it is the rename stops halfway. This section is the record of where it stopped, so
+the half-state is read as a decision rather than as an oversight.
+
+It lives in exactly three places, and they are in three different states:
+
+| place | today | changes when |
+|---|---|---|
+| user-facing copy | `popmint` | done — the wordmark and the hero are set |
+| `package.json` `name` | `nftraffle` | the domain is bought |
+| `SITE_URL` | the `nftraffle` deployment | the domain is bought |
+
+**Why copy moved first and the other two did not.** Copy is what the owner is
+looking at while deciding, and it costs nothing to be wrong. `SITE_URL` is what a
+deployment tells the world it is: pointed at a domain nobody owns, it produces
+dead links in exactly the surfaces where a dead link reads as the product being
+fake — a raffle's public page, a verification link, an operator's payout record.
+`package.json` follows `SITE_URL` so the two never disagree about which deployment
+this is.
+
+It remains deliberately **not** in any database value, any migration, any column
+name, any cookie name that would need a migration to change, or any generated
+image. What is left of the rename is one string and one environment variable, and
+it stays that way.

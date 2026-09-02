@@ -47,9 +47,10 @@ import { clientIp, hashIp } from "./client-ip";
 /**
  * The session cookie's name.
  *
- * Deliberately generic rather than branded. The working name is a placeholder
- * (DESIGN.md §11) and a cookie carrying it would be a fourth place a rename has
- * to touch — one that silently signs every live operator out when it changes.
+ * Deliberately generic rather than branded. The name is decided (`popmint`) but
+ * the rename is not finished (DESIGN.md §11), and a cookie carrying a brand would
+ * be a fourth place a rename has to touch — one that silently signs every live
+ * operator out when it changes. It stays generic after the rename lands too.
  */
 export const ADMIN_COOKIE = "admin_session";
 

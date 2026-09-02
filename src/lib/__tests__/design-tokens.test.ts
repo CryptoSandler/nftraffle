@@ -19,8 +19,9 @@ import { contrastRatio, FLOORS, TOKENS, TOKEN_ROLES, type Mode, type TokenName }
  * trusted.
  *
  * **And it defends the one rule the whole palette rests on**: the accent is the
- * countdown and nothing else (docs/decisions.md Q19). That is a rule about where
- * a colour may appear, so the test greps the source for where it appears.
+ * action and the countdown, and nothing else (docs/decisions.md Q22, which
+ * reopened Q19's first answer). That is a rule about where a colour may appear,
+ * so the test greps the source for where it appears.
  */
 
 const DESIGN = readFileSync(join(process.cwd(), "DESIGN.md"), "utf8");
@@ -149,20 +150,21 @@ describe("the accent is the action and the clock, and nothing else", () => {
   }
 
   /**
-   * **THIS IS THE DIRECTION THAT REVERSES Q19, AND IT SHOULD BE JUDGED ON IT.**
+   * **THIS RULE REPLACED Q19's FIRST ANSWER, AND THE REPLACEMENT WAS DECIDED.**
    *
-   * `docs/decisions.md` Q19 gives the accent one job — the clock — and accepts
-   * a black-on-white primary action as the price. Popmint takes the opposite
+   * `docs/decisions.md` Q19 gave the accent one job — the clock — and accepted
+   * a black-on-white primary action as the price. Popmint took the opposite
    * bet: **one loud colour is the brand and the thing you press**, which is
    * what makes Gumroad's page look like a product rather than a dashboard.
    *
-   * The owner suspended Q19's rule for the exploration. If this direction is
-   * chosen, Q19 has to be reopened and answered again rather than quietly
-   * overridden — that is what this comment is for.
+   * The owner chose this direction on 2026-09-02 and reopened Q19 to say so
+   * (Q22), rather than letting the direction override a recorded decision
+   * quietly. Q19's SECOND answer — zero casino — was not reopened and did not
+   * move.
    *
-   * The rule that replaces it is still a rule, and still enforced: the accent
-   * is `.pop-action` and `.clock`. It is not a heading, not body text, not a
-   * border, not a state.
+   * The rule that replaced it is still a rule, and still enforced here: the
+   * accent is `.pop-action` and `.clock`. It is not a heading, not body text,
+   * not a border, not a state. A third selector needs a Q23, not an edit.
    */
   it("appears nowhere in the source except through .clock and .pop-action", () => {
     const offenders = sources.filter((file) =>

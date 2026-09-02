@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * THE GUARDIAN FOR DESIGN.md §4–§6, and like §2's it reads the document.
+ * THE GUARDIAN FOR DESIGN.md §3–§6, and like §2's it reads the document.
  *
  * These are rules about WHERE things appear in the source — which token borders
  * a control, whether a focus style exists, whether a number is animated. No type
@@ -56,6 +56,44 @@ function controls(): { file: string; tag: string; classes: string }[] {
   }
   return found;
 }
+
+describe("§3 Typography — three families, and the display face has two doors", () => {
+  const LAYOUT = readFileSync(join(ROOT, "src/app/layout.tsx"), "utf8");
+
+  /** `| `Inter` | `--font-sans` | sentences |` */
+  function documentedFamilies(): { family: string; variable: string }[] {
+    return DESIGN.split("\n")
+      .map((line) => /^\|\s*`([\w ]+)`\s*\|\s*`(--font-[a-z]+)`\s*\|/.exec(line))
+      .filter((m): m is RegExpExecArray => m !== null)
+      .map((m) => ({ family: m[1], variable: m[2] }));
+  }
+
+  it("loads exactly the families the document names, under the variables it names", () => {
+    // A fourth face is the change nobody argues about, because each one arrives
+    // for a single heading that "needed" it.
+    const documented = documentedFamilies();
+    expect(documented.map((f) => f.variable).sort()).toEqual(["--font-display", "--font-mono", "--font-sans"]);
+    for (const { family, variable } of documented) {
+      expect(LAYOUT, `${family} imported`).toContain(family.replace(/ /g, "_"));
+      expect(LAYOUT, `${family} bound to ${variable}`).toContain(`variable: "${variable}"`);
+    }
+    const imported = /import\s*\{([^}]+)\}\s*from\s*"next\/font\/google"/.exec(LAYOUT);
+    expect(imported, "the google-font import").not.toBeNull();
+    expect(imported![1].split(",").map((s) => s.trim()).filter(Boolean)).toHaveLength(documented.length);
+  });
+
+  it("the display face reaches type through exactly two rules", () => {
+    // DESIGN.md §3: `.display` for the wordmark and every heading, `.pop-action`
+    // for the button. A third rule is a change to §3, not a styling choice — the
+    // same shape as the accent's two selectors in design-tokens.test.ts.
+    const uses = CSS.split("\n").filter((l) => l.includes("var(--font-display)") && !l.includes("--font-display:"));
+    expect(uses).toHaveLength(2);
+    for (const selector of [".display {", ".pop-action {"]) {
+      const block = CSS.slice(CSS.indexOf(selector), CSS.indexOf("}", CSS.indexOf(selector)));
+      expect(block, selector).toContain("var(--font-display)");
+    }
+  });
+});
 
 describe("§4 Form — two shapes and no others", () => {
   it("finds the controls at all", () => {

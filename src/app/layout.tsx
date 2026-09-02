@@ -3,7 +3,7 @@ import { Archivo_Black, IBM_Plex_Mono, Inter } from "next/font/google";
 import "./globals.css";
 
 /**
- * Two families, both through `next/font/google`, with no system stack anywhere:
+ * Three families, all through `next/font/google`, with no system stack anywhere:
  * a face that resolves differently per machine is a design that does not exist
  * (DESIGN.md §3).
  *
@@ -12,10 +12,14 @@ import "./globals.css";
  * counts, slot numbers, hashes — and proportional digits make that a chore. It
  * is used for EVERY figure without exception, including inside sentences.
  *
- * Inter rather than a face with more personality, deliberately: DESIGN.md §10
- * records that the interface stays plain until the mechanism stops moving, and
- * picking an expressive face now would be the first half of a visual system
- * built over surfaces that are still changing.
+ * Inter carries sentences and nothing else. Archivo Black is the display face and
+ * reaches type through exactly two CSS rules — `.display`, which the wordmark and
+ * every heading carry, and `.pop-action`, which is the button. It never carries a
+ * sentence and never carries a figure. DESIGN.md §10 records that the interface
+ * stayed plain until the mechanism stopped moving; it stopped on 2026-08-31, the
+ * direction was chosen on 2026-09-02, and this is the face that came with it. A
+ * THIRD rule using `var(--font-display)` is a change to §3, not a styling choice,
+ * and `design-form.test.ts` fails on it.
  */
 const inter = Inter({
   variable: "--font-sans",

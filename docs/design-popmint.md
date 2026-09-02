@@ -1,3 +1,14 @@
+> **CHOSEN — 2026-09-02.** The owner picked this direction, and it is now
+> normative in `DESIGN.md` — §2 (colour and register), §3 (type), §5 (layout),
+> §6 (motion), §10 (the bet) and §11 (the name). `docs/decisions.md` Q22 records
+> the decision and the reopening of Q19 it required.
+>
+> **Nothing below is normative**, including where it disagrees with `DESIGN.md`:
+> this is the argument as it was put to the owner, kept unedited so the choice can
+> be read against what it was choosing between (`docs/design-vitrine.md` and
+> `docs/design-mintdesk.md`, both discarded the same day). Where this file and
+> `DESIGN.md` differ, `DESIGN.md` is what the code is held to.
+
 # Direction 3 — POPMINT (toy / pop)
 
 **A candidate, not a decision.** One of three built to be looked at side by side.

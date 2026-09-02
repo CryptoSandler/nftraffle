@@ -8,23 +8,24 @@
  * in prose is one nobody applies. The guardian reads the document, so a hex
  * changed in one place fails the suite rather than drifting quietly.
  *
- * **The design is settled by `docs/decisions.md` Q19**, and every rule below is
- * one of those answers rather than taste:
+ * **The design is settled by `docs/decisions.md` Q19 as amended by Q22**, and
+ * every rule below is one of those answers rather than taste:
  *
- *  - **One accent with exactly one job: the clock.** Not buttons, not links, not
- *    errors, not the buy action. An accent that appears on ordinary controls
- *    stops meaning anything; this one is meant to be the only coloured thing on
- *    a page so the eye goes to the number that is running out.
- *  - **The primary action is black on white** — the cost of the rule above,
- *    accepted deliberately. This product's claim is that it is honest about a
- *    countdown, not that it is good at selling.
- *  - **Zero casino.** No gold, no red urgency, no green success. The register is
- *    an instrument you read, not a table you play at.
+ *  - **One accent with exactly two jobs: the action and the clock.** `.pop-action`
+ *    and `.clock`, and nothing else — not a heading, not body text, not a border,
+ *    not a state, not an error. This REVERSES Q19's first answer, which gave the
+ *    accent one job and priced it at a black-on-white primary action; the owner
+ *    reopened and re-answered it 2026-09-02 as Q22. Do not widen it further here:
+ *    the next widening is the one with no argument behind it.
+ *  - **Zero casino, unchanged.** No gold, no red urgency, no green success. Q22
+ *    reopened the accent's job and nothing else; the register did not move.
  *
- * **The accent is a signal teal, and the hue is a decision.** Red and gold are
- * the casino register outright. Green reads as "go" and as money. Blue reads as
- * a hyperlink, and this is not one. Teal at this darkness reads as measurement —
- * a gauge, a marked scale — which is what a countdown on this product is.
+ * **The accent is violet, and the hue is a decision.** Red and gold are the casino
+ * register outright. Green reads as "go" and as money. Blue reads as a hyperlink,
+ * and neither a countdown nor a button is one. Magenta and pink are Magic Eden's,
+ * and this palette's whole risk is being mistaken for them. Violet is the nearest
+ * loud hue that is none of those, and these two darknesses are the ones that still
+ * clear 8:1 on ground AND panel in both modes — a lighter violet does not.
  *
  * WHO CALLS THIS: `src/app/globals.css` carries the same values as CSS custom
  * properties (the guardian checks those too); nothing imports this at runtime
