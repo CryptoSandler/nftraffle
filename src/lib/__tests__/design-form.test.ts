@@ -164,9 +164,26 @@ describe("§6 Motion — almost none, and the exceptions are named", () => {
     expect(offenders.map(rel)).toEqual([]);
   });
 
-  it("the only transition is on interaction affordances, at the documented duration", () => {
+  it("the only transitions are the documented two, at the documented durations", () => {
     expect(CSS).toContain("120ms ease-out");
-    expect(CSS).not.toMatch(/transition:[^;]*\b(width|height|transform|opacity)\b/);
+    // DESIGN.md §6: this direction adds `transform` at 90ms, and nothing else.
+    // `width`, `height` and `opacity` stay forbidden — those are the ones that
+    // read as loading, and a page that fakes loading is lying about a cadence.
+    expect(CSS).not.toMatch(/transition:[^;]*\b(width|height|opacity)\b/);
+    for (const line of CSS.split("\n").filter((l) => /transition:[^;]*transform/.test(l))) {
+      expect(line, "a transform transition must be the documented 90ms").toContain("90ms ease-out");
+    }
+  });
+
+  it("the transform is limited to the two classes the document names", () => {
+    // The rule that keeps "loud" from becoming "casino": a press, and no
+    // celebration. Anything else transforming is a new argument to be made.
+    const movers = CSS.split("\n")
+      .map((line, i) => ({ line, i }))
+      .filter(({ line }) => /transform:\s*translateY/.test(line))
+      .map(({ i }) => CSS.split("\n").slice(0, i).reverse().find((l) => l.trim().startsWith(".")))
+      .map((selector) => (selector ?? "").trim().replace(/[{ ].*$/, ""));
+    expect([...new Set(movers)].sort()).toEqual([".door:hover", ".pop-action:active", ".pop-action:hover"]);
   });
 
   it("prefers-reduced-motion is honoured globally", () => {

@@ -102,13 +102,13 @@ people's money move, and this one has exactly one moving part, the clock.
 
 | Token | Light | Dark | What it is for |
 |---|---|---|---|
-| `ground` | `#FAFBFB` | `#0B0F0F` | the page |
-| `panel` | `#F1F4F3` | `#141918` | a raised block: notices, the placeholder frame |
-| `ink` | `#101413` | `#E9EEED` | body text and headings |
-| `quiet` | `#4A5250` | `#A3ADAB` | labels and secondary text |
-| `rule` | `#C9D1CF` | `#2A3231` | hairlines between rows |
-| `edge` | `#7F8A88` | `#636D69` | the border of a control a person can act on |
-| `accent` | `#00514E` | `#5EEADF` | the countdown, and nothing else |
+| `ground` | `#FEFCF8` | `#0B0714` | the page |
+| `panel` | `#F2EDFF` | `#161028` | a raised block: cards, the three doors |
+| `ink` | `#120C22` | `#F2ECFF` | body text and headings |
+| `quiet` | `#494060` | `#ABA1C6` | labels and secondary text |
+| `rule` | `#DBD3EF` | `#2B2145` | hairlines between rows |
+| `edge` | `#786D95` | `#6E6490` | the border of a control a person can act on |
+| `accent` | `#431BBB` | `#B79DFF` | the brand and the action: it is what you press, and the clock |
 
 **The accent has one job and it is the clock.** Not buttons, not links, not
 errors, not the buy action. An accent that appears on ordinary controls stops
@@ -133,14 +133,14 @@ the guardian test recomputes them from this table rather than trusting it.
 
 | Mode | Token | on `ground` | on `panel` | Floor | WCAG |
 |---|---|---|---|---|---|
-| light | `ink` | 17.90 | 16.77 | 7:1 | AA AAA |
-| light | `quiet` | 7.75 | 7.26 | 7:1 | AA AAA |
-| light | `accent` | 8.86 | 8.30 | 8:1 | AA AAA |
-| light | `edge` | 3.44 | 3.22 | 3:1 | — |
-| dark | `ink` | 16.45 | 15.16 | 7:1 | AA AAA |
-| dark | `quiet` | 8.37 | 7.72 | 7:1 | AA AAA |
-| dark | `accent` | 13.14 | 12.11 | 8:1 | AA AAA |
-| dark | `edge` | 3.60 | 3.32 | 3:1 | — |
+| light | `ink` | 18.61 | 16.65 | 7:1 | AA AAA |
+| light | `quiet` | 9.38 | 8.39 | 7:1 | AA AAA |
+| light | `accent` | 9.70 | 8.68 | 8:1 | AA AAA |
+| light | `edge` | 4.64 | 4.15 | 3:1 | AA |
+| dark | `ink` | 17.27 | 16.00 | 7:1 | AA AAA |
+| dark | `quiet` | 8.20 | 7.59 | 7:1 | AA AAA |
+| dark | `accent` | 8.80 | 8.15 | 8:1 | AA AAA |
+| dark | `edge` | 3.69 | 3.41 | 3:1 | AA |
 
 **The floors are stricter than WCAG AA on purpose.** AA is 4.5:1 and is a floor
 for *reading*; this product asks people to make money decisions from figures on
@@ -248,10 +248,19 @@ ultimately a column of figures.
 
 **Almost none, and the exceptions are named.**
 
-The only transition in this product is `120ms ease-out` on `background-color`,
-`border-color` and `color`, and only on things you can interact with. Below about
-100ms a transition is not perceived as motion; above about 200ms it is perceived
-as waiting.
+The only transitions in this product are `120ms ease-out` on `background-color`,
+`border-color` and `color`, and — **this direction's one addition** — `90ms
+ease-out` on `transform`, limited to two classes: `.pop-action` and `.door`, and
+limited to **two pixels**. Below about 100ms a transition is not perceived as
+motion; above about 200ms it is perceived as waiting.
+
+**Why a transform is allowed here and nowhere else.** This direction's argument
+is that a page can be loud and still not be a table you play at. A control that
+gives two pixels under the pointer is the cheapest way to feel like an object
+rather than a document, and two pixels is not enough distance to celebrate
+anything. The line it must not cross is fixed by `docs/decisions.md` Q19: no
+confetti, no spin, no bounce, no scale on a win, nothing that moves after a
+result. The motion is a PRESS, and a press happens before the outcome.
 
 **Nothing animates a number.** Not the countdown, not the ticket counter, not a
 balance. A figure that eases toward its new value reads as live when it is polled

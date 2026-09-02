@@ -127,7 +127,7 @@ describe("the measured contrast table is measured, not asserted", () => {
   });
 });
 
-describe("the accent has exactly one job", () => {
+describe("the accent is the action and the clock, and nothing else", () => {
   function sourceFiles(dir: string): string[] {
     return readdirSync(dir).flatMap((entry) => {
       const full = join(dir, entry);
@@ -140,17 +140,6 @@ describe("the accent has exactly one job", () => {
     (f) => !f.endsWith("design-tokens.ts") && !f.endsWith("globals.css"),
   );
 
-  /**
-   * Comments stripped before matching, because this test reads CODE.
-   *
-   * Its first version matched the token name anywhere in the file and flagged
-   * `Countdown.tsx` — for a doc comment that states the rule. Documenting a
-   * constraint is exactly what should happen next to the code it governs, and a
-   * guard that punishes it teaches people to stop writing the comment.
-   *
-   * Conservative on purpose: whole block comments, and lines that are entirely a
-   * comment. Nothing that could swallow a line of code.
-   */
   function code(file: string): string {
     return readFileSync(file, "utf8")
       .replace(/\/\*[\s\S]*?\*\//g, "")
@@ -159,27 +148,36 @@ describe("the accent has exactly one job", () => {
       .join("\n");
   }
 
-  it("appears nowhere in the source except through the .clock class", () => {
-    /**
-     * THE RULE THE WHOLE PALETTE RESTS ON (docs/decisions.md Q19). An accent
-     * that shows up on a button, a link or an error stops meaning "the clock",
-     * and once it means nothing the countdown is just another coloured thing.
-     *
-     * Enforced by grep because it is a rule about WHERE a colour appears, which
-     * no type can express. `globals.css` is excluded because that is where
-     * `.clock` legitimately defines it.
-     */
+  /**
+   * **THIS IS THE DIRECTION THAT REVERSES Q19, AND IT SHOULD BE JUDGED ON IT.**
+   *
+   * `docs/decisions.md` Q19 gives the accent one job — the clock — and accepts
+   * a black-on-white primary action as the price. Popmint takes the opposite
+   * bet: **one loud colour is the brand and the thing you press**, which is
+   * what makes Gumroad's page look like a product rather than a dashboard.
+   *
+   * The owner suspended Q19's rule for the exploration. If this direction is
+   * chosen, Q19 has to be reopened and answered again rather than quietly
+   * overridden — that is what this comment is for.
+   *
+   * The rule that replaces it is still a rule, and still enforced: the accent
+   * is `.pop-action` and `.clock`. It is not a heading, not body text, not a
+   * border, not a state.
+   */
+  it("appears nowhere in the source except through .clock and .pop-action", () => {
     const offenders = sources.filter((file) =>
       /--accent|text-accent|bg-accent|border-accent/.test(code(file)),
     );
     expect(offenders.map((f) => f.replace(process.cwd() + "/", ""))).toEqual([]);
   });
 
-  it("globals.css uses --accent only inside .clock", () => {
+  it("globals.css uses --accent only in .clock and .pop-action", () => {
     const uses = CSS.split("\n").filter((l) => l.includes("var(--accent)"));
-    expect(uses).toHaveLength(1);
-    const clockBlock = CSS.slice(CSS.indexOf(".clock {"), CSS.indexOf("}", CSS.indexOf(".clock {")));
-    expect(clockBlock).toContain("var(--accent)");
+    expect(uses).toHaveLength(2);
+    for (const selector of [".clock {", ".pop-action {"]) {
+      const block = CSS.slice(CSS.indexOf(selector), CSS.indexOf("}", CSS.indexOf(selector)));
+      expect(block, selector).toContain("var(--accent)");
+    }
   });
 
   it("nothing quiets text with opacity or a filter", () => {

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Mono, Inter } from "next/font/google";
+import { Archivo_Black, IBM_Plex_Mono, Inter } from "next/font/google";
 import "./globals.css";
 
 /**
@@ -20,6 +20,21 @@ import "./globals.css";
 const inter = Inter({
   variable: "--font-sans",
   subsets: ["latin"],
+});
+
+/**
+ * The display face, and this direction's argument in one import.
+ *
+ * A single very heavy weight, used at sizes where it stops being type and
+ * becomes a shape. Gumroad's page is built on exactly this move
+ * (docs/references-design.md §6) and it is what makes a page read as a product
+ * with a personality rather than a dashboard. Used ONLY for the headline, the
+ * wordmark and the three doors.
+ */
+const archivoBlack = Archivo_Black({
+  variable: "--font-display",
+  subsets: ["latin"],
+  weight: ["400"],
 });
 
 const plexMono = IBM_Plex_Mono({
@@ -63,7 +78,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${inter.variable} ${plexMono.variable} h-full antialiased`}>
+    <html lang="en" className={`${inter.variable} ${plexMono.variable} ${archivoBlack.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col bg-ground text-ink">{children}</body>
     </html>
   );

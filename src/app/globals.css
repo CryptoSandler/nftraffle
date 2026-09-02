@@ -17,30 +17,31 @@
  */
 
 :root {
-  --ground: #FAFBFB;
-  --panel: #F1F4F3;
-  --ink: #101413;
-  --quiet: #4A5250;
-  --rule: #C9D1CF;
-  --edge: #7F8A88;
-  --accent: #00514E;
+  --ground: #FEFCF8;
+  --panel: #F2EDFF;
+  --ink: #120C22;
+  --quiet: #494060;
+  --rule: #DBD3EF;
+  --edge: #786D95;
+  --accent: #431BBB;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --ground: #0B0F0F;
-    --panel: #141918;
-    --ink: #E9EEED;
-    --quiet: #A3ADAB;
-    --rule: #2A3231;
-    --edge: #636D69;
-    --accent: #5EEADF;
+    --ground: #0B0714;
+    --panel: #161028;
+    --ink: #F2ECFF;
+    --quiet: #ABA1C6;
+    --rule: #2B2145;
+    --edge: #6E6490;
+    --accent: #B79DFF;
   }
 }
 
 @theme inline {
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
+  --font-display: var(--font-display);
 
   /*
    * Exposed to Tailwind so `text-ink`, `bg-panel`, `border-rule` resolve.
@@ -211,5 +212,69 @@ a {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/**
+ * ---------------------------------------------------------------------------
+ * Popmint: the toy direction.
+ * ---------------------------------------------------------------------------
+ * `docs/design-popmint.md` carries the argument. Three rules live here:
+ *
+ * 1. **One loud colour does the brand AND the action** — Gumroad's move
+ *    (docs/references-design.md §6). This is the direction where the accent is
+ *    allowed to be pressed, which the other two refuse.
+ * 2. **The promise is a number, not an adjective.** "0 -> live in 3 minutes"
+ *    is the headline, and the type is heavy enough to be read as a shape.
+ * 3. **Motion is a press, not a celebration.** Things move 2px when you push
+ *    them. Nothing pops, nothing rains, nothing spins — `docs/decisions.md`
+ *    Q19's ZERO CASINO holds in all three directions, and this is the one where
+ *    it takes discipline.
+ */
+
+.display {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 0.92;
+  text-transform: uppercase;
+}
+
+/* The thing you press. The accent's second job, and only in this direction. */
+.pop-action {
+  background: var(--accent);
+  color: var(--ground);
+  border-radius: 999px;
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  transition: transform 90ms ease-out;
+}
+
+.pop-action:hover {
+  transform: translateY(-2px);
+}
+
+.pop-action:active {
+  transform: translateY(1px);
+}
+
+/* A door: one of the three entries. It moves the same 2px, and no further. */
+.door {
+  transition: transform 90ms ease-out;
+}
+
+.door:hover {
+  transform: translateY(-2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pop-action,
+  .door {
+    transition: none;
+  }
+  .pop-action:hover,
+  .door:hover {
+    transform: none;
   }
 }

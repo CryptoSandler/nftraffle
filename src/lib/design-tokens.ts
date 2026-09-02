@@ -41,32 +41,32 @@ export type TokenName = "ground" | "panel" | "ink" | "quiet" | "rule" | "edge" |
  */
 export const TOKEN_ROLES: Record<TokenName, string> = {
   ground: "the page",
-  panel: "a raised block: notices, the placeholder frame",
+  panel: "a raised block: cards, the three doors",
   ink: "body text and headings",
   quiet: "labels and secondary text",
   rule: "hairlines between rows",
   edge: "the border of a control a person can act on",
-  accent: "the countdown, and nothing else",
+  accent: "the brand and the action: it is what you press, and the clock",
 };
 
 export const TOKENS: Record<Mode, Record<TokenName, string>> = {
   light: {
-    ground: "#FAFBFB",
-    panel: "#F1F4F3",
-    ink: "#101413",
-    quiet: "#4A5250",
-    rule: "#C9D1CF",
-    edge: "#7F8A88",
-    accent: "#00514E",
+    ground: "#FEFCF8",
+    panel: "#F2EDFF",
+    ink: "#120C22",
+    quiet: "#494060",
+    rule: "#DBD3EF",
+    edge: "#786D95",
+    accent: "#431BBB",
   },
   dark: {
-    ground: "#0B0F0F",
-    panel: "#141918",
-    ink: "#E9EEED",
-    quiet: "#A3ADAB",
-    rule: "#2A3231",
-    edge: "#636D69",
-    accent: "#5EEADF",
+    ground: "#0B0714",
+    panel: "#161028",
+    ink: "#F2ECFF",
+    quiet: "#ABA1C6",
+    rule: "#2B2145",
+    edge: "#6E6490",
+    accent: "#B79DFF",
   },
 };
 
