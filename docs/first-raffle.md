@@ -196,8 +196,50 @@ without argument. The screen shows you that number before you commit — read it
 
 ### B2 — Create the draft
 
-Through `/raffle/new`. **Check the response carries** `seedHash` and `drawHeight`,
-and that `seedHash` is 64 hex characters.
+`POST /api/raffles` — the same call the devnet runbook makes
+([`devnet-rehearsal.md`](devnet-rehearsal.md) §1), with the same body. curl sends
+no `Origin` header, so the same-origin guard passes it.
+
+**Prefer the form at `/raffle/new`** now that it exists: it signs with the wallet
+you are holding the prize in, which is the wallet that has to send the asset two
+steps later, and a mismatch there is caught by Phantom rather than by a refusal.
+
+The curl path still works and is what the rehearsals use. It needs a signature
+from the seller's keypair, because the seller is derived from one and never taken
+on the caller's word (`docs/decisions.md` Q20):
+
+```bash
+BINDING=$(npx tsx scripts/sign-seller-binding.mts \
+  --keypair <SELLER_KEYPAIR> --asset "$PRIZE_ASSET" --domain "<prod-host>")
+
+curl -s -X POST https://<prod>/api/raffles -H 'content-type: application/json' -d "{
+  \"chain\": \"solana\",
+  \"prizeAsset\": \"$PRIZE_ASSET\",
+  \"ticketPrice\": \"$TICKET_PRICE\",
+  \"maxTickets\": $MAX_TICKETS,
+  \"durationMinutes\": $DURATION_MINUTES,
+  \"binding\": $BINDING
+}" | tee /tmp/draft.json
+```
+
+**On mainnet this means the seller's private key is on the machine running the
+script.** That is the one place in this product where that is true, and it is
+true of `solana transfer` too — the prize and the fee have to be sent from it. If
+that is not acceptable for the wallet holding a real prize, use the form: the key
+stays in Phantom.
+
+**Check the response carries** `slug`, `seedHash`, `drawAt` and `endsAt`, that
+`seedHash` is 64 hex characters, and that `drawAt` is exactly ten minutes after
+`endsAt` — that arithmetic is the commitment, so do it yourself.
+
+**There is no `drawHeight` in this response, and there should not be.** This line
+named one until 2026-09-01, from back when the draw was anchored to a predicted
+slot; `docs/decisions.md` Q14 replaced that with an instant, and
+`docs/findings-2026-08-31-draw-margin.md` is why. A runbook asking for a field the
+route stopped returning is a step that fails for the wrong reason.
+
+**The form on `/raffle/new` makes this same call**, with the same body and the
+same signature, produced by the wallet instead of by the script.
 
 **The seed itself must not appear anywhere** — not in the response, not in a log,
 not on the page. Confirm:

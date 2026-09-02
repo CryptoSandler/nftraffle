@@ -719,6 +719,73 @@ was for.
 
 ---
 
+# The listing surface — decided 2026-09-01
+
+## Q20 — A Solana draft is opened by a signature, not by a name
+
+Put to the owner before the listing form was built, and answered the same day:
+**`POST /api/raffles` requires a `solana:signMessage` binding from the seller's
+wallet, verified server-side with `@noble/curves`, and derives the seller from
+it.** The wallet is no longer a field the caller fills in.
+
+### What it fixes, which was a live defect and not a hypothetical
+
+`raffles_live_prize` (migration 004) is unique over `(chain, prize_asset)` for
+`draft`, `open`, `closed` and `drawn`. The route insisted only that the wallet
+NAMED as seller really holds the asset — so anybody could post a draft for a
+stranger's NFT, naming that stranger, and the holder would then be unable to
+list their own asset: `prize_already_listed`, against a draft that appears in no
+public listing, so they could not find the slug to cancel it either. One
+unauthenticated request, no wallet, no cost, unrecoverable without an operator
+reading the database.
+
+Nothing had exploited it because nothing but a runbook knew the route existed.
+The listing form is what would have changed that, which is why this was closed
+in the same batch rather than after it.
+
+### Why this does not reopen Q18
+
+Q18 records that the payer binding exists on EVM and not on Solana, and calls
+that a gap rather than a principle. This is the answer for ONE surface, and it
+stays there: **buying a ticket still asks for no message signature.** A ticket
+payment is verified from the chain's own record of whose lamports moved
+(SECURITY.md, and the `preBalances`/`postBalances` rule in CLAUDE.md), so a
+signature would add a prompt and prove nothing new. What a listing needs is
+different in kind: it claims an exclusive slot BEFORE any transaction exists to
+read.
+
+**Robinhood keeps taking `sellerWallet` on the caller's word**, and the same
+slot-grab is possible there. Deliberate, and recorded so it is not mistaken for
+an oversight: that surface is shut on every deployment, its gate is
+`docs/testnet-rehearsal-robinhood.md` passing whole, and thirteen of that
+runbook's checks have never run. Adding an unrehearsed signing step to it would
+change what the gate measures while it is being run. The mirror block is marked
+in `src/app/api/raffles/route.ts` for when that surface opens.
+
+### What it costs
+
+**A terminal can no longer create a Solana draft on its own.** Every runbook in
+this repository creates drafts with curl, and a shell has no wallet — so
+`scripts/sign-seller-binding.mts` exists to sign from a keypair file, and
+`docs/devnet-rehearsal.md` and `docs/first-raffle.md` both now start with it. On
+mainnet that means the seller's private key is on the machine running the
+script, which the first-raffle runbook says out loud, alongside the alternative:
+use the form, and the key stays in Phantom.
+
+**A second wallet prompt in the listing flow**, before the two that move money.
+The message says, in its own text, that it moves no funds — the prompt looks
+exactly like what people have been warned about, and that sentence is the
+cheapest honest answer.
+
+### Trigger to revisit
+
+If a seller ever reports being unable to list an asset they hold, check for a
+draft holding the slot before anything else: that is what this was built to
+prevent, and it would mean the binding is being bypassed somewhere. And when the
+Robinhood listing surface opens, this decision is what its gate has to include.
+
+---
+
 ## Still open
 
 Nothing from the twelve above. New questions go here as they arise, in the same

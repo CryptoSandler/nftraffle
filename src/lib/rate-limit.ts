@@ -26,6 +26,7 @@ import { positiveInt } from "./config";
  * but name.
  *
  * WHO CALLS THIS: `tooManyOrders` from `POST /api/raffles/[slug]/orders`;
+ * `meterListingAttempt` from `POST /api/raffles`;
  * `checkVerificationLimits` and `recordVerificationAttempt` from
  * `POST /api/orders/[id]/confirm`.
  */
@@ -66,6 +67,66 @@ export async function tooManyOrders(ipHash: string): Promise<LimitDecision> {
     retryAfterSeconds: windowMinutes * 60,
     message: "Too many orders started from this address recently. Try again shortly.",
   };
+}
+
+function listingRateLimit(): { max: number; windowMinutes: number } {
+  return {
+    max: positiveInt(process.env.LISTING_RATE_LIMIT_MAX, 10),
+    windowMinutes: positiveInt(process.env.LISTING_RATE_LIMIT_WINDOW_MINUTES, 10),
+  };
+}
+
+/**
+ * Whether this caller has opened too many raffle drafts lately, and records
+ * this attempt if not.
+ *
+ * **Counting and recording are one function on purpose.** They are two round
+ * trips either way, and separating them makes it possible to call the check
+ * without the record — which reads as a working limiter, passes a test that
+ * drives one request, and counts nothing.
+ *
+ * **A refused attempt writes no row.** The table exists to meter what costs us
+ * a DAS read; a caller who is already locked out is not spending one, and
+ * letting them grow the table while locked out would make the refusal the
+ * cheapest way to fill it.
+ *
+ * **This runs BEFORE the ownership read it meters**, for the reason
+ * `recordVerificationAttempt` gives: the expensive part is the outbound
+ * request, and it is spent whether or not the asset turns out to be there.
+ *
+ * WHO CALLS THIS: `POST /api/raffles`, after the seller binding verifies and
+ * before the chain is asked anything.
+ */
+export async function meterListingAttempt(ipHash: string): Promise<LimitDecision> {
+  const { max, windowMinutes } = listingRateLimit();
+  const row = await queryOne<{ count: string }>(
+    `SELECT count(*) AS count FROM listing_attempts
+      WHERE ip_hash = $1 AND attempted_at > now() - ($2 || ' minutes')::interval`,
+    [ipHash, String(windowMinutes)],
+  );
+  if (Number(row?.count ?? 0) >= max) {
+    return {
+      limited: true,
+      retryAfterSeconds: windowMinutes * 60,
+      message: "Too many listings started from this address recently. Try again shortly.",
+    };
+  }
+
+  await query(`INSERT INTO listing_attempts (id, ip_hash) VALUES ($1,$2)`, [
+    `la_${randomUUID().replaceAll("-", "")}`,
+    ipHash,
+  ]);
+  await pruneListingAttempts();
+  return { limited: false };
+}
+
+/** Swept from the write path, like the other two attempt tables. */
+async function pruneListingAttempts(): Promise<void> {
+  await query(
+    `DELETE FROM listing_attempts
+      WHERE attempted_at <= now() - ($1 || ' hours')::interval`,
+    [String(ATTEMPT_RETENTION_HOURS)],
+  );
 }
 
 /**

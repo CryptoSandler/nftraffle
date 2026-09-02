@@ -249,16 +249,34 @@ PRIZE_ASSET=<the Core asset address>
 
 ## 1. Create the draft
 
+**The seller signs first.** `POST /api/raffles` stopped taking a seller's wallet
+on the caller's word (`docs/decisions.md` Q20); the browser form signs with the
+wallet, and a shell signs with this:
+
+```bash
+BINDING=$(npx tsx scripts/sign-seller-binding.mts \
+  --keypair seller.json --asset "$PRIZE_ASSET" --domain "${API#*//}")
+```
+
+`--domain` is the HOST, with no scheme — `${API#*//}` is that. The server rebuilds
+the message from its own `Host` header, so a mismatch refuses with `wrong_domain`
+rather than with anything about the wallet. The signature is good for five
+minutes, so sign it immediately before the call.
+
 ```bash
 curl -s -X POST $API/api/raffles -H 'content-type: application/json' -d "{
   \"chain\": \"solana\",
   \"prizeAsset\": \"$PRIZE_ASSET\",
-  \"sellerWallet\": \"$SELLER\",
   \"ticketPrice\": \"0.05\",
   \"maxTickets\": 5,
-  \"durationMinutes\": 20
+  \"durationMinutes\": 20,
+  \"binding\": $BINDING
 }" | tee /tmp/draft.json
 ```
+
+**There is no `sellerWallet` field any more on Solana.** It is derived from the
+signature. Sending one that disagrees with the signer is refused
+(`seller_mismatch`); sending none is the normal case.
 
 **Expect** `201` and a body with `slug`, `chain: "solana"`, `seedHash`,
 `drawAt`, `endsAt`.
@@ -278,8 +296,33 @@ curl -s -X POST $API/api/raffles -H 'content-type: application/json' -d "{
 SLUG=$(python3 -c "import json;print(json.load(open('/tmp/draft.json'))['slug'])")
 ```
 
-**Negative — the seller must hold the asset.** With `sellerWallet` set to
-`$IMPOSTOR`, expect `409` and `That asset is not held by this wallet.`
+**Negative — the seller must hold the asset.** Sign the binding with the
+impostor's keypair instead, for the same asset, and post it:
+
+```bash
+BINDING_IMPOSTOR=$(npx tsx scripts/sign-seller-binding.mts \
+  --keypair impostor.json --asset "$PRIZE_ASSET" --domain "${API#*//}")
+```
+
+**Expect** `409` and `That asset is not held by this wallet.` The signature is
+VALID here — the impostor really does control the wallet they signed with — and
+the refusal comes from the chain being asked who holds the asset. Those are two
+different checks and this negative only exercises the second.
+
+**Negative — the signature has to be the seller's.** Take the honest `$BINDING`
+from above and replace `fields.address` with `$IMPOSTOR`, leaving the signature
+alone:
+
+```bash
+BINDING_FORGED=$(python3 -c "
+import json,os
+b=json.loads(os.environ['BINDING']); b['fields']['address']=os.environ['IMPOSTOR']
+print(json.dumps(b))")
+```
+
+**Expect** `400` and `address_mismatch`. **If this publishes a draft, stop** —
+the seller is being taken on the caller's word again, and anybody can take the
+listing slot of any asset on the chain (`docs/decisions.md` Q20).
 
 ---
 

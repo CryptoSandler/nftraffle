@@ -98,6 +98,21 @@ mainnet money at any point.**
 This is the only outstanding item on `docs/first-raffle.md` that could still find
 a BUG rather than needing a decision, which is why it is worth doing first.
 
+**The whole thing in three lines**, for somebody who does not want to read the
+four sections under it:
+
+1. **Open** `http://localhost:3000/r/dmxxxgb4-mti7361j` after
+   `cp .env.rehearsal .env.local && npm run build && npm start`. The page must
+   say *"Devnet. This deployment settles on Solana devnet."* — if it does not,
+   stop before connecting anything.
+2. **Sign one ticket, 0.05 SOL**, from a Phantom in Testnet Mode → Solana Devnet.
+   Before approving: one signature and it is yours, the amount is 0.05 SOL,
+   Phantom says Devnet, and **there is no red "may be malicious" screen**.
+3. **Switch to a Phantom account with no SOL and try again.** The page must
+   refuse by itself — *"You need 0.050005 more SOL for this — the ticket plus the
+   network fee."* — and **Phantom must never open**. Step 3 is the one that tests
+   something; steps 1 and 2 only tell you the happy path still works.
+
 ### Step 0 — start the server (one command)
 
 ```bash
