@@ -1,9 +1,9 @@
 import { execFileSync, spawn } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
-import { readHolder, takeSuiteLock } from "../../../suite-lock";
+import { readHolder, repoName, repoNameFrom, takeSuiteLock } from "../../../suite-lock";
 
 /**
  * The machine-wide queue, and the three properties the whole design rests on.
@@ -23,7 +23,7 @@ function holderProcess(path: string): { pid: number; stop: () => void } {
   const source =
     `const fs=require("fs");` +
     `fs.openSync(${JSON.stringify(path)}, fs.constants.O_CREAT|fs.constants.O_RDWR|0x20|fs.constants.O_NONBLOCK);` +
-    `fs.writeFileSync(${JSON.stringify(path)}, JSON.stringify({repo:"another-repo",pid:process.pid,startedAt:new Date().toISOString()}));` +
+    `fs.writeFileSync(${JSON.stringify(path)}, JSON.stringify({repo:"another-repo",cwd:"/somewhere/else",pid:process.pid,startedAt:new Date().toISOString()}));` +
     `setTimeout(()=>{}, 120000);`;
   const child = spawn(process.execPath, ["-e", source], { stdio: "ignore" });
   // The child has to have opened the file before the assertions run. A short
@@ -32,6 +32,62 @@ function holderProcess(path: string): { pid: number; stop: () => void } {
   while (Date.now() < until && readHolder(path) === null) execFileSync("sleep", ["0.05"]);
   return { pid: child.pid!, stop: () => child.kill("SIGKILL") };
 }
+
+/**
+ * WHICH REPOSITORY IS HOLDING IT, which is not the same question as which
+ * directory the run is in.
+ *
+ * The first version answered `basename(process.cwd())`, and on 2026-09-02 a run
+ * in the throwaway worktree `~/proyectos/cinders-b22` announced itself as
+ * `cinders-b22` — a name that appears in no repository, sending whoever read
+ * the message looking for a project that does not exist.
+ */
+describe("who the lock says is holding it", () => {
+  it("names the repository, not the worktree the run happens to be in", () => {
+    expect(
+      repoNameFrom(
+        "https://CryptoSandler@github.com/CryptoSandler/drakes.fun.git",
+        "/Users/fede/proyectos/cinders/.git",
+        "/var/folders/T/tmp.abc/worktrees/drakes",
+      ),
+    ).toBe("drakes.fun");
+  });
+
+  it("falls back to the MAIN working tree when there is no remote", () => {
+    // `--git-common-dir` from inside a worktree points at the real repository's
+    // own `.git`, which is what makes this the right fallback rather than a
+    // second way of reading the directory the run is in.
+    expect(repoNameFrom(null, "/Users/fede/proyectos/pixelwar/.git", "/tmp/wt/anything")).toBe(
+      "pixelwar",
+    );
+  });
+
+  it("falls back to the directory only when there is no git at all", () => {
+    expect(repoNameFrom("", "", "/Users/fede/scratch/thing")).toBe("thing");
+  });
+
+  /*
+    THE EXPECTATION IS DERIVED, NOT WRITTEN DOWN, and that is the whole point of
+    this case. The first version asserted the literal `milliondollarpage.fun`,
+    and this file is copied verbatim into five repositories — so in `drakes` it
+    failed with `expected 'drakes.fun' to be 'milliondollarpage.fun'`, which is
+    the function being RIGHT and the test being wrong about where it lives.
+  */
+  it("reads this repository's own name off git rather than off the folder", () => {
+    const remote = execFileSync("git", ["config", "--get", "remote.origin.url"], {
+      encoding: "utf8",
+    }).trim();
+    const expected = basename(remote.replace(/\/+$/, "")).replace(/\.git$/, "");
+
+    expect(repoName()).toBe(expected);
+    // And where the checkout is named differently from the repository — which
+    // is true here, and in every worktree anywhere — the folder is not what
+    // comes back.
+    if (expected !== basename(process.cwd())) {
+      expect(repoName()).not.toBe(basename(process.cwd()));
+    }
+  });
+});
 
 describe("the machine-wide suite lock", () => {
   it("waits for a holder rather than refusing, and says who has it", async () => {
