@@ -25,7 +25,7 @@ import { sellerBindingMessage } from "../src/lib/wallet/solana-binding";
 
 config({ path: ".env.local" });
 
-const API = process.env.API ?? "http://localhost:3100";
+const API = process.env.API ?? "http://localhost:3101";
 const RPC = process.env.SOLANA_RPC_URL!;
 const PAYMENT = process.env.PAYMENT_WALLET_SOLANA!;
 const KEYS = `${process.env.HOME}/.config/solana/nftraffle-devnet`;

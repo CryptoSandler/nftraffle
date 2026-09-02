@@ -173,7 +173,7 @@ cp .env.testnet .env.local && npm run build && npm start
 Shell variables used below:
 
 ```bash
-API=http://localhost:3000
+API=http://localhost:3101
 SELLER=0x…   BUYER=0x…   IMPOSTOR=0x…
 PAYMENT=0x…  ESCROW=0x…
 PRIZE=0x<contract>/<tokenId>
@@ -316,7 +316,7 @@ npm run rehearse:robinhood               # runs this step and every other one
 curl -s -X POST $API/api/raffles/$SLUG/orders -H 'content-type: application/json' \
   -d "{\"quantity\":2,\"payerPubkey\":\"$BUYER\",\"binding\":{
         \"signature\":\"0x…\",
-        \"domain\":\"localhost:3000\",
+        \"domain\":\"localhost:3101\",
         \"address\":\"$BUYER\",
         \"slug\":\"$SLUG\",
         \"chainId\":46630,

@@ -7,8 +7,8 @@ platform. Every claim below is a command's output.
 **preview** branch and devnet, with the durable devnet keypairs. Run it with:
 
 ```bash
-cp .env.rehearsal .env.local && npm run build && PORT=3141 npm start
-API=http://localhost:3141 npm run rehearse:launch
+cp .env.rehearsal .env.local && npm run build && npm start
+npm run rehearse:launch
 ```
 
 ---

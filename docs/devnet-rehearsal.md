@@ -231,7 +231,7 @@ every request is refused.
 Shell variables used throughout:
 
 ```bash
-API=http://localhost:3000
+API=http://localhost:3101
 SELLER=$(solana-keygen pubkey seller.json)
 BUYER=$(solana-keygen pubkey buyer.json)
 ESCROW=$(solana-keygen pubkey escrow.json)

@@ -101,7 +101,7 @@ a BUG rather than needing a decision, which is why it is worth doing first.
 **The whole thing in three lines**, for somebody who does not want to read the
 four sections under it:
 
-1. **Open** `http://localhost:3000/r/dmxxxgb4-mti7361j` after
+1. **Open** `http://localhost:3101/r/dmxxxgb4-mti7361j` after
    `cp .env.rehearsal .env.local && npm run build && npm start`. The page must
    say *"Devnet. This deployment settles on Solana devnet."* — if it does not,
    stop before connecting anything.
@@ -120,7 +120,7 @@ cd ~/proyectos/nftraffle
 cp .env.rehearsal .env.local && npm run build && npm start
 ```
 
-Then open **http://localhost:3000/r/dmxxxgb4-mti7361j** — *Concentric No. 3*,
+Then open **http://localhost:3101/r/dmxxxgb4-mti7361j** — *Concentric No. 3*,
 0.05 SOL a ticket, 20 tickets, open until **2026-09-15**. A real devnet raffle
 with a real prize in escrow, listed 2026-09-01 for this.
 

@@ -30,7 +30,7 @@ const CHECK_ONLY = process.argv.includes("--check");
 
 /** Everything this needs, and what it is for. Missing values are listed, not guessed. */
 const REQUIRED = {
-  API: "the local server, e.g. http://localhost:3000",
+  API: "the local server, e.g. http://localhost:3101",
   ROBINHOOD_RPC_URL: "the testnet RPC endpoint",
   RH_SELLER_KEY: "0x-prefixed private key that owns the prize",
   RH_BUYER_KEY: "0x-prefixed private key with testnet ETH",

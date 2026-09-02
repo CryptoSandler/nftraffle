@@ -192,8 +192,8 @@ Two traps, both hit while doing this:
   no money variables and every surface reads "not open" — which looks exactly
   like a configuration bug in the rehearsal env.
 - **Kill the old server by PID, not by pattern.** A leftover process holding
-  `:3000` makes the new one fail with `EADDRINUSE` while `curl` happily answers
-  from the old one. `lsof -ti :3000` and kill those.
+  `:3101` makes the new one fail with `EADDRINUSE` while `curl` happily answers
+  from the old one. `lsof -ti :3101` and kill those.
 
 The options, in order:
 

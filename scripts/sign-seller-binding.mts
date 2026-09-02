@@ -23,7 +23,7 @@ import { sellerBindingMessage } from "../src/lib/wallet/solana-binding";
  *
  *   npx tsx scripts/sign-seller-binding.mts \
  *     --keypair ~/.config/solana/nftraffle-devnet/seller.json \
- *     --asset <MINT> --domain localhost:3000
+ *     --asset <MINT> --domain localhost:3101
  */
 
 function arg(name: string): string | undefined {
@@ -38,8 +38,8 @@ const domain = arg("domain");
 if (!keypairPath || !asset || !domain) {
   console.error(
     "usage: sign-seller-binding.mts --keypair <path> --asset <mint> --domain <host[:port]>\n" +
-      "  --domain is the HOST the request will carry, exactly: `localhost:3000`,\n" +
-      "  not `http://localhost:3000`. The server rebuilds the message from its own\n" +
+      "  --domain is the HOST the request will carry, exactly: `localhost:3101`,\n" +
+      "  not `http://localhost:3101`. The server rebuilds the message from its own\n" +
       "  host, so a mismatch here refuses with `wrong_domain`.",
   );
   process.exit(2);
