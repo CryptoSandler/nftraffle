@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { LaunchCollection } from "../../components/LaunchCollection";
+import { classifyEndpoints } from "../../lib/chain/solana/cluster";
+import { solanaRpcUrls } from "../../lib/payments/config";
 import { adapterFor } from "../../lib/chain/registry";
 import { launchFee, mintFeeBps } from "../../lib/payments/config";
 import { surfaceRefusal } from "../../lib/surfaces";
@@ -50,16 +53,42 @@ export default function LaunchPage() {
             <dt className="text-quiet">Launch fee</dt>
             <dd className="figure">{fee.ok ? `${chain.formatNative(fee.amount)} ${chain.nativeSymbol}` : "—"}</dd>
             <dt className="text-quiet">Platform share of each mint</dt>
-            <dd className="figure">{share.ok ? `${share.bps} bps` : "—"}</dd>
+            {/*
+              * A RATE, said to be a rate, because the amount does not exist
+              * until a price does. `solFixedFee` takes fixed lamports, so the
+              * rate is applied once when the machine is created and the AMOUNT
+              * is what gets charged forever after (spec §0.1). Quoting the bps
+              * as if it were charged per mint would describe a mechanism this
+              * product does not have.
+              */}
+            <dd className="figure">{share.ok ? `${share.bps} bps of your price` : "—"}</dd>
           </dl>
           <p className="mt-4 text-sm text-quiet">
-            The platform share is charged by the candy machine itself, as a guard on the mint
-            instruction. It is our fee, not a network fee — Solana&apos;s own fee is a fraction of
-            a cent.
+            That share is worked out once, when you launch, and frozen into the mint machine as a
+            fixed amount in {chain.nativeSymbol}. Changing the rate later does not touch a
+            collection that already exists, and every mint page shows the amount its own machine
+            charges rather than the rate it came from. It is our fee, not a network fee —
+            Solana&apos;s own fee is a fraction of a cent.
           </p>
-          <p className="mt-8 text-quiet">
-            The create flow is not built yet. Nothing on this page charges anything.
+          <p className="mt-4 text-sm text-quiet">
+            The machine charges it, not this site: it is a guard on the mint instruction, so a
+            minter who assembles their own transaction pays it too.
           </p>
+          <div className="mt-8">
+            {fee.ok && share.ok ? (
+              <LaunchCollection
+                proxyCluster={classifyEndpoints(solanaRpcUrls())}
+                isProduction={process.env.VERCEL_ENV === "production"}
+                launchFeeDisplay={chain.formatNative(fee.amount)}
+                mintFeeBps={share.bps}
+                nativeSymbol={chain.nativeSymbol}
+              />
+            ) : (
+              <p className="text-quiet">
+                Launching is not available right now. Nothing has been charged.
+              </p>
+            )}
+          </div>
         </>
       )}
     </main>

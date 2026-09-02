@@ -117,7 +117,20 @@ export function useSolanaWallet() {
    * the method takes and what `getBase64EncodedWireTransaction` produces.
    */
   const signAndSendWire = useCallback(
-    async (base64Transaction: string, chain: string): Promise<string> => {
+    async (
+      base64Transaction: string,
+      chain: string,
+      /**
+       * `forceSignOnly` is for transactions that ALREADY CARRY SIGNATURES.
+       *
+       * The launchpad's transactions are partially signed on the server — a new
+       * collection account and a new candy machine account each sign their own
+       * creation — and `signAndSendTransaction` is a wallet's own submit path,
+       * which is not required to preserve signatures it did not make. Signing
+       * and submitting through our own proxy keeps the bytes we built.
+       */
+      options: { forceSignOnly?: boolean } = {},
+    ): Promise<string> => {
       if (!connection) throw new Error("No wallet is connected.");
       const { wallet, account } = connection;
       /**
@@ -131,7 +144,7 @@ export function useSolanaWallet() {
        */
       const bytes = Uint8Array.from(atob(base64Transaction), (c) => c.charCodeAt(0));
 
-      if (wallet.capability === "sign_and_send") {
+      if (wallet.capability === "sign_and_send" && !options.forceSignOnly) {
         const feature = wallet.wallet.features[SOLANA_SIGN_AND_SEND] as SignAndSendFeature;
         const [{ signature }] = await feature.signAndSendTransaction({
           account,
@@ -141,7 +154,10 @@ export function useSolanaWallet() {
         return base58(signature);
       }
 
-      const feature = wallet.wallet.features[SOLANA_SIGN_TRANSACTION] as SignFeature;
+      const feature = wallet.wallet.features[SOLANA_SIGN_TRANSACTION] as SignFeature | undefined;
+      if (!feature?.signTransaction) {
+        throw new Error("This wallet cannot sign a transaction that is already partly signed.");
+      }
       const [{ signedTransaction }] = await feature.signTransaction({ account, transaction: bytes });
 
       const response = await fetch("/api/rpc/solana", {

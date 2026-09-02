@@ -72,11 +72,13 @@ function signBinding(privateKey: string, slug: string, domain: string, chainId: 
     issuedAt: new Date().toISOString(),
   };
   const key = Uint8Array.from(Buffer.from(privateKey.replace(/^0x/, ""), "hex"));
-  const rec = secp256k1.sign(personalSignDigest(payerBindingMessage(fields)), key, {
+  // The recovery id is a field on the signature here and the LAST byte, offset
+  // by 27, in Ethereum's encoding. `verifyPayerBinding` accepts 27/28 and 0/1
+  // on the way back in, because wallets disagree about which they emit.
+  const sig = secp256k1.sign(personalSignDigest(payerBindingMessage(fields)), key, {
     prehash: false,
-    format: "recovered",
   });
-  const signature = `0x${Buffer.from(rec.subarray(1)).toString("hex")}${(rec[0] + 27).toString(16).padStart(2, "0")}`;
+  const signature = `0x${Buffer.from(sig.toCompactRawBytes()).toString("hex")}${(sig.recovery + 27).toString(16).padStart(2, "0")}`;
   return { signature, ...fields };
 }
 

@@ -28,13 +28,14 @@ const KNOWN_ADDRESS = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266";
 
 function sign(message: string, keyHex = KNOWN_KEY): string {
   const digest = personalSignDigest(message);
-  // `recovered` is 65 bytes with the recovery id FIRST; Ethereum puts it last.
-  const recovered = secp256k1.sign(digest, Uint8Array.from(Buffer.from(keyHex, "hex")), {
+  // The recovery id travels beside the signature here and LAST in Ethereum's
+  // encoding, offset by 27. Both spellings are accepted on the way back in —
+  // there is a test for that, because wallets disagree.
+  const signature = secp256k1.sign(digest, Uint8Array.from(Buffer.from(keyHex, "hex")), {
     prehash: false,
-    format: "recovered",
   });
-  const body = Buffer.from(recovered.subarray(1)).toString("hex");
-  const v = (recovered[0] + 27).toString(16).padStart(2, "0");
+  const body = Buffer.from(signature.toCompactRawBytes()).toString("hex");
+  const v = (signature.recovery + 27).toString(16).padStart(2, "0");
   return `0x${body}${v}`;
 }
 

@@ -2,10 +2,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { assetDisplays } from "../../../../lib/chain/asset-display";
 import { AssetImage } from "../../../../components/AssetImage";
+import { MintCollection } from "../../../../components/MintCollection";
+import { readDeployedLaunch } from "../../../../lib/launch/candy";
+import { classifyEndpoints } from "../../../../lib/chain/solana/cluster";
 import { Countdown } from "../../../../components/Countdown";
+import { utcInstant } from "../../../../lib/countdown";
 import { isChainId } from "../../../../lib/chain/adapter";
 import { adapterFor } from "../../../../lib/chain/registry";
-import { rpcConfigured } from "../../../../lib/payments/config";
+import { rpcConfigured, solanaRpcUrls } from "../../../../lib/payments/config";
 import {
   collectionBySlug,
   rafflesForOutsideCollection,
@@ -81,6 +85,15 @@ export default async function CollectionPage({ params }: PageProps<"/c/[chain]/[
           <dt className="text-quiet">Candy machine</dt>
           <dd className="figure break-all">{launched.candyMachine ?? "—"}</dd>
         </dl>
+        {launched.candyMachine && chainParam === "solana" ? (
+          /*
+           * The supply left is READ FROM THE CHAIN, not from a counter here.
+           * A machine can be minted from by anybody holding its address —
+           * that is what a public candy machine is — so a number this site
+           * kept would drift the first time somebody did.
+           */
+          <Mint chain={chainParam} launched={launched} />
+        ) : null}
         <Raffles raffles={raffles} />
       </Shell>
     );
@@ -189,6 +202,55 @@ async function Raffles({ raffles }: { raffles: RaffleSummary[] }) {
           })}
         </ul>
       )}
+    </section>
+  );
+}
+
+/**
+ * The mint panel, with what is left read off the chain.
+ *
+ * Separate so the page's own body stays a list of facts. The cluster is
+ * classified server-side and passed down as a NAME — never the endpoint, which
+ * is the whole reason `/api/rpc` exists.
+ */
+async function Mint({
+  chain,
+  launched,
+}: {
+  chain: "solana";
+  launched: { slug: string; candyMachine: string | null; itemsAvailable: number; priceNative: bigint; mintFeeNative: bigint; startsAt?: Date | null };
+}) {
+  const adapter = adapterFor(chain);
+  const deployed = launched.candyMachine ? await readDeployedLaunch(launched.candyMachine) : null;
+  const remaining = deployed
+    ? Number(deployed.itemsAvailable - deployed.itemsRedeemed)
+    : launched.itemsAvailable;
+
+  return (
+    <section className="mt-10 border-t border-rule pt-6">
+      <h2 className="text-sm uppercase tracking-wide text-quiet">Mint</h2>
+      <p className="mt-2 text-sm text-quiet">
+        <span className="figure">{remaining}</span> of{" "}
+        <span className="figure">{launched.itemsAvailable}</span> left.
+      </p>
+      <div className="mt-4">
+        <MintCollection
+          slug={launched.slug}
+          proxyCluster={classifyEndpoints(solanaRpcUrls())}
+          isProduction={process.env.VERCEL_ENV === "production"}
+          priceDisplay={adapter.formatNative(launched.priceNative)}
+          mintFeeDisplay={adapter.formatNative(launched.mintFeeNative)}
+          nativeSymbol={adapter.nativeSymbol}
+          remaining={remaining}
+          /*
+           * The INSTANT, not a sentence about it. Whether it is still ahead is
+           * a question about now, and now is not something a server component
+           * may read during render — so the panel decides, once, on mount.
+           */
+          startsAtMs={deployed?.startsAtMs ?? null}
+          startsAtText={deployed?.startsAtMs ? utcInstant(new Date(deployed.startsAtMs)) : null}
+        />
+      </div>
     </section>
   );
 }

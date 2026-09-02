@@ -45,6 +45,17 @@ export function bindingFieldsFor(input: {
   };
 }
 
+/**
+ * When a launch should open, as the API wants it.
+ *
+ * Here for the same reason `bindingFieldsFor` is: the design suite forbids
+ * `toISOString()` in a `.tsx`, and the scar behind that rule is a raw
+ * `2026-08-31T21:55:05.841Z` reaching a page. This string is sent, not shown.
+ */
+export function startsAtFromNow(minutes: number): string {
+  return new Date(Date.now() + Math.max(0, minutes) * 60_000).toISOString();
+}
+
 export type PublishFailure = { reason?: unknown; message: string };
 
 export type PublishOutcome =

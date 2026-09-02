@@ -181,9 +181,10 @@ export function verifyPayerBinding(input: {
   let recovered: string;
   try {
     const digest = personalSignDigest(payerBindingMessage(fields));
-    const sig = secp256k1.Signature.fromBytes(Uint8Array.from(bytes.subarray(0, 64)), "compact")
-      .addRecoveryBit(recovery);
-    recovered = addressFromPublicKey(sig.recoverPublicKey(digest).toBytes(false));
+    const sig = secp256k1.Signature.fromCompact(
+      Uint8Array.from(bytes.subarray(0, 64)),
+    ).addRecoveryBit(recovery);
+    recovered = addressFromPublicKey(sig.recoverPublicKey(digest).toRawBytes(false));
   } catch {
     return { ok: false, reason: "malformed_signature" };
   }
