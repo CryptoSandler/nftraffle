@@ -786,6 +786,92 @@ Robinhood listing surface opens, this decision is what its gate has to include.
 
 ---
 
+# The launchpad — decided 2026-09-02
+
+## Q21 — umi is allowed, on the server, for two jobs
+
+Put to the owner with the `/launch` round and answered the same day: **`umi` and
+the Metaplex clients built on it may be used, confined to the server, for
+creating the candy machine and uploading to Irys — and never in a browser
+bundle.** A test walks the client import graph and fails if any
+`@metaplex-foundation/*` package is reachable from a `"use client"` entry
+(`src/lib/__tests__/client-bundle.test.ts`).
+
+### Why this is an exception and not a reversal
+
+`src/lib/wallet/solana-standard.ts` records what this project's last dependency
+decision cost and bought: dropping `@solana/wallet-adapter-react` took the
+dependency count from 419 to 163 and `npm audit` to zero, because that package
+pulled `react-native` and every advisory with it. The rule that came out of it —
+prefer the protocol over the wrapper — is why the listing batch hand-encoded
+Core's `TransferV1` rather than adding `mpl-core`: two bytes and seven accounts,
+verified against the program's own enum, its generated client, and a devnet
+simulation.
+
+**Three things make the candy machine a different question, and all three have
+to be true for the exception to hold:**
+
+1. **The object is permanent and somebody else paid for it.** A wrong transfer
+   fails simulation and costs nothing. A wrong candy machine is an account on
+   mainnet, created with a creator's SOL, that either cannot mint or mints
+   without our fee. There is no second attempt that is free.
+2. **The serialization is not two bytes.** A guard set is a feature bitfield
+   followed by ordered, variable-length structs, and this product has to write
+   it AND read it back — `docs/superpowers/specs/2026-08-28-nftraffle-design.md`
+   §5.3 step 4 verifies the deployed `solFixedFee` names `PAYMENT_WALLET`. A
+   hand-rolled decoder that is subtly wrong reports a fee that is not being
+   charged, which is worse than not checking.
+3. **It is other people's money.** §0.1 exists because client-side enforcement
+   of money is not a lazy version of the feature, it is a broken version. The
+   same sentence applies to a hand-rolled guard encoder.
+
+None of the three applies to a browser. The browser signs transactions this
+server built and simulated, which is the pattern the buy panel and the listing
+form already follow, so the exception stops at the server boundary — and the
+test is what makes that a fact rather than an intention.
+
+### What it costs, measured after the decision rather than guessed before it
+
+**63 packages and six moderate advisories, from 600 lockfile entries to 663 and
+from a clean `npm audit` to this:**
+
+    bn.js <4.12.3 — infinite loop, GHSA-378v-28hj-76wf, NO FIX AVAILABLE
+      via number-to-bn / ethjs-unit -> web3-utils -> merkletreejs
+      -> @metaplex-foundation/mpl-core-candy-machine
+
+Recorded here because the owner decided without this number, and because it is
+the specific thing `solana-standard.ts` cleaned up last time. Two facts bound it,
+and neither makes it disappear:
+
+- **The vulnerable path is the merkle allowlist**, and spec §0.9 cuts allowlists
+  and guard groups from v1. Nothing in this codebase calls it.
+- **It is server-only**, by Q21's own rule and the test that enforces it, so no
+  visitor's browser ever loads it.
+
+`npm install` in this repository now needs `--legacy-peer-deps`, because
+`mpl-core` peer-depends on `@noble/hashes@^1` and this project's own signing
+code is on `@noble/hashes@^2` — the version `@noble/curves@2` requires. Pinning
+the root to v1 would break `evm-binding.ts` and `solana-binding.ts`; the nested
+`overrides` npm offers do not apply to peer resolution. So the two versions
+coexist and **the combination is verified by running it on devnet**, not by
+reading the peer range.
+
+Dependencies come back. The audit surface grows, and a second transaction stack
+(`umi`) now sits beside `@solana/kit` — two ways to build a transaction in one
+repository, which is exactly the kind of thing that becomes "two implementations
+that must agree". The boundary that keeps it honest: **umi builds; the wallet
+signs; `@solana/kit` is what the rest of the product speaks.** A umi type in a
+signature anywhere outside the launchpad's own modules is the tell that the
+boundary moved.
+
+### Trigger to revisit
+
+If a Metaplex client for `@solana/kit` (Codama-generated, no umi runtime) covers
+candy machine creation and guard decoding, this exception has no reason left and
+the dependency comes out. Check when the launchpad is next touched.
+
+---
+
 ## Still open
 
 Nothing from the twelve above. New questions go here as they arise, in the same
